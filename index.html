@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>Financial Coach</title>
+<link rel="stylesheet" href="css/app.css">
+<script src="vendor/supabase.min.js" defer></script>
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<header class="bar">
+  <span class="brand">Financial Coach</span>
+  <span id="who" class="who" hidden></span>
+  <button id="signOut" class="link" type="button" hidden>Sign out</button>
+</header>
+
+<main id="app">
+  <section id="loading" class="panel">
+    <p class="muted">Loading…</p>
+  </section>
+
+  <section id="setup" class="panel" hidden>
+    <h1>Setup needed</h1>
+    <p>Set <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> in <code>js/config.js</code>.</p>
+  </section>
+
+  <section id="signIn" class="panel" hidden>
+    <h1>Sign in</h1>
+    <p class="muted">Access is by invitation. Enter the email address your invite went to. We will send a sign-in link.</p>
+    <form id="signInForm" novalidate>
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" required>
+      <button id="sendLink" type="submit">Send sign-in link</button>
+    </form>
+    <p id="signInMsg" class="msg" role="status" aria-live="polite"></p>
+  </section>
+
+  <section id="home" class="panel" hidden>
+    <p class="disclaimer">This coach gives education, not advice. It is not a licensed financial advisor, tax professional, or attorney.</p>
+    <div class="row">
+      <h1>Your sessions</h1>
+      <button id="newSession" type="button">Start new session</button>
+    </div>
+    <ul id="sessions" class="list"></ul>
+    <p id="homeMsg" class="msg" role="status" aria-live="polite"></p>
+  </section>
+</main>
+</body>
+</html>
