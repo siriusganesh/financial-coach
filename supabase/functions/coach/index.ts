@@ -12,8 +12,9 @@ import { contextBlock, FOLLOWUP_TASK, NARRATIVE_SCHEMA, NARRATIVE_TASK, RETRY, S
 import { RESEARCH } from "./research.ts";
 
 const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.8-flash";
-// Used when MODEL is overloaded (HTTP 503/500) after the retries.
-const FALLBACK = Deno.env.get("GEMINI_FALLBACK_MODEL") ?? "gemini-3.6-flash";
+// Tried in order when MODEL is overloaded (HTTP 503/500) after the retries.
+const FALLBACKS = (Deno.env.get("GEMINI_FALLBACK_MODELS") ?? "gemini-3.6-flash,gemini-3.5-flash-lite")
+  .split(",").map((m) => m.trim()).filter(Boolean);
 const QUOTA = Number(Deno.env.get("QUOTA_PER_DAY") ?? "50");
 const ORIGINS = ["https://siriusganesh.github.io", "http://localhost:8000"];
 
@@ -31,16 +32,16 @@ type Turn = { role: "user" | "model"; parts: { text: string }[] };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Retries an overloaded model (503/500) twice, then tries FALLBACK once.
+// Retries an overloaded model (503/500) twice, then tries each fallback once.
 // A 429 (free-tier limit) is not retried.
 async function gemini(contents: Turn[], schema?: unknown) {
-  const plan = [MODEL, MODEL, MODEL, FALLBACK];
+  const plan = [MODEL, MODEL, MODEL, ...FALLBACKS];
   let last: Error | null = null;
   for (let i = 0; i < plan.length; i++) {
     try { return { ...(await geminiOnce(plan[i], contents, schema)), model: plan[i] }; } catch (e) {
       last = e as Error;
       if (!(e as { overloaded?: boolean }).overloaded) throw e;
-      if (i < plan.length - 1) await sleep([1000, 3000, 0][i] ?? 0);
+      if (i < plan.length - 1) await sleep([1000, 3000][i] ?? 500);
     }
   }
   throw last!;
@@ -61,7 +62,7 @@ async function geminiOnce(model: string, contents: Turn[], schema?: unknown) {
   if (!r.ok) {
     const msg = j?.error?.message ?? r.statusText;
     const err = new Error(r.status === 429 ? `Gemini free-tier limit reached. Try again later. (${msg})`
-      : r.status === 503 || r.status === 500 ? `Gemini is overloaded right now (${model}). Try again in a few minutes.`
+      : r.status === 503 || r.status === 500 ? `Gemini is overloaded right now (tried ${[MODEL, ...FALLBACKS].join(", ")}). Try again in a few minutes.`
       : `Gemini error ${r.status}: ${msg}`);
     (err as Error & { overloaded?: boolean }).overloaded = r.status === 503 || r.status === 500;
     throw err;
