@@ -218,3 +218,17 @@ a.change { color: var(--accent); }
 section.target { animation: target-flash 1.8s ease-out; border-radius: 6px; scroll-margin-top: 16px; }
 @media (max-width: 899px) { section.q, section.card { scroll-margin-top: 64px; } }
 @media (prefers-reduced-motion: reduce) { section.target { animation: none; outline: 3px solid var(--accent); } }
+
+/* ---------- leave guard banner, scroll-spy, touch targets ---------- */
+.alertbar { position: sticky; top: 8px; z-index: 6; background: var(--warn-bg); border: 1px solid var(--border);
+  border-left: 4px solid #b5521b; border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; }
+.alertbar a { color: var(--accent); font-weight: 600; }
+@media (max-width: 899px) { .alertbar { top: 60px; } }
+.seclink.active { color: var(--accent); font-weight: 600; }
+.sidenav-hint { font-size: .78rem; margin: 10px 0 0; }
+h1.progress:focus { outline: none; }
+h1.progress:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (pointer: coarse) {
+  .seclink, .ch .chlink, .sidenav-home { min-height: 44px; display: flex; align-items: center; }
+  .sidenav-toggle { min-height: 44px; }
+}

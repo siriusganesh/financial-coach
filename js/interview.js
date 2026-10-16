@@ -7,7 +7,7 @@ import { renderQuestions, collect, applyVisibility, fmtMoney } from "./form.js";
 import { cashCheck } from "./cashflow.js";
 import { renderTagged, legend } from "./tags.js";
 import { renderAnalysis } from "./analysis.js";
-import { sidebar, chapterName, changeLinks, stepHref, QUESTIONS, scrollToEl, flash } from "./nav.js";
+import { sidebar, chapterName, changeLinks, stepHref, QUESTIONS, scrollToEl, flash, setLeaveGuard } from "./nav.js";
 
 const SCHEMA = 1;
 const blankAnswers = () => ({ hh: {}, earners: [{}] });
@@ -138,27 +138,32 @@ export async function showInterview(sb, root, sessionId, stepParam, nav, opts = 
   if (n > maxStep) n = maxStep;
   const ret = opts.ret && opts.ret !== n && opts.ret <= maxStep ? opts.ret : null;
 
-  // Leaving a form page from the sidebar saves first (no lost answers).
-  let leave = null;                                  // set below for form pages
-  const side = sidebar({ id: sessionId, n, maxStep, title: st.session.title,
-    onNavigate: (href, ev) => { if (leave) leave(href, ev); } });
-  const content = h("div", { class: "content" });
+  setLeaveGuard(null);
+  const side = sidebar({ id: sessionId, n, maxStep, title: st.session.title });
+  // Messages about leaving the page show here, at the top, where they are seen.
+  const alertBar = h("div", { class: "alertbar", role: "alert", hidden: "" });
+  const content = h("div", { class: "content" }, alertBar);
   root.replaceChildren(h("div", { class: "layout" }, side, content));
-  const head = h("div", { class: "stephead" }, h("h1", { class: "progress", text: `Step ${n} of 13: ${chapterName(n)}` }));
+  const h1 = h("h1", { class: "progress", tabindex: "-1", text: `Step ${n} of 13: ${chapterName(n)}` });
+  const head = h("div", { class: "stephead" }, h1);
+  document.title = `Step ${n}: ${chapterName(n)} · Financial Coach`;
   const returnBar = ret ? h("p", { class: "returnbar" }, `You came from Step ${ret}: ${chapterName(ret)}. `,
     h("a", { href: stepHref(sessionId, ret), text: "Go back without changes" })) : null;
   const sectionsOf = (page) => [...page.querySelectorAll("section.q, section.card")]
     .filter(sec => !sec.hidden && sec.querySelector("h2"))
     .map(sec => ({ target: sec, label: sec.dataset.label || sec.querySelector("h2").firstChild.textContent.trim() }));
+  // Focus: the question asked for, or the page heading (screen readers
+  // announce the new page).
   const jump = (page) => {
     const t = opts.q && page.querySelector(`section[data-q="${opts.q}"]`);
-    if (t) { scrollToEl(t); flash(t); } else window.scrollTo(0, 0);
+    if (t) { scrollToEl(t); flash(t); } else { window.scrollTo(0, 0); h1.focus({ preventScroll: true }); }
   };
 
   if (n >= 9) {
     const page = h("div", { class: "panel interview" }, head, returnBar);
     content.append(page);
     window.scrollTo(0, 0);
+    h1.focus({ preventScroll: true });
     await renderAnalysis(sb, st, n, sessionId, page, async (next) => {
       const step = Math.max(st.session.step, next);
       const patch = next >= 13 ? { step, status: "done" } : { step };
@@ -220,26 +225,32 @@ export async function showInterview(sb, root, sessionId, stepParam, nav, opts = 
       applyVisibility(body, A, ctx);
     });
   }
+  // Unsaved answers: any way of leaving (sidebar, Back, browser back) goes
+  // through this guard. Valid answers are saved; invalid ones stop the move.
   let dirty = false;
+  const setDirty = (v) => { dirty = v; if (v) page.dataset.dirty = ""; else delete page.dataset.dirty; };
   if (body) {
-    page.addEventListener("input", () => { dirty = true; });
-    page.addEventListener("change", () => { dirty = true; });
-    page.addEventListener("click", (ev) => { if (ev.target.closest(".lrow .rm, .list-field > button")) dirty = true; });
-    leave = async (href, ev) => {
-      if (!dirty) return;                            // nothing to save: follow the link
-      ev.preventDefault();
+    page.addEventListener("input", () => setDirty(true));
+    page.addEventListener("change", () => setDirty(true));
+    page.addEventListener("click", (ev) => { if (ev.target.closest(".lrow .rm, .list-field > button")) setDirty(true); });
+    setLeaveGuard(async (href) => {
+      if (!dirty) return true;
       const { A, errors } = collect(body, st.A, ctx);
       if (errors) {
-        msg.replaceChildren(`Some answers on this page need fixing (${errors} marked in red). Fix them, or `,
+        alertBar.replaceChildren(`Your changes are not saved. ${errors} answer${errors > 1 ? "s need" : " needs"} fixing (marked in red). Fix ${errors > 1 ? "them" : "it"}, or `,
           h("a", { href, class: "leave-anyway", text: "leave without saving" }), ".");
+        alertBar.hidden = false;
+        alertBar.querySelector(".leave-anyway").addEventListener("click", () => setDirty(false));
         body.querySelector(".bad input, .bad select, .bad textarea")?.focus();
-        msg.querySelector(".leave-anyway").addEventListener("click", () => { dirty = false; });
-        return;
+        return false;
       }
-      msg.textContent = "Saving…";
-      try { await save(sb, st, A, n); dirty = false; location.hash = href; }
-      catch (e) { msg.textContent = `Could not save: ${e.message}`; }
-    };
+      try { await save(sb, st, A, n); setDirty(false); return true; }
+      catch (e) {
+        alertBar.textContent = `Could not save your changes: ${e.message}`;
+        alertBar.hidden = false;
+        return false;
+      }
+    });
   }
   side.setSections(sectionsOf(page));
   requestAnimationFrame(() => jump(page));
@@ -262,7 +273,7 @@ export async function showInterview(sb, root, sessionId, stepParam, nav, opts = 
         return;
       }
       await save(sb, st, A, ret ? n : n + 1);
-      dirty = false;
+      setDirty(false);
       nav(ret ? `#/s/${sessionId}/${ret}` : `#/s/${sessionId}/${n + 1}`);
     } catch (e) {
       msg.textContent = `Could not save: ${e.message}`;

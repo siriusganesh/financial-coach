@@ -32,6 +32,12 @@ export const QUESTIONS = {
   q22: [7, "Life insurance"], q23: [7, "Disability insurance"], q24: [7, "Deductible"], q25: [7, "Borrowing to invest"],
 };
 
+// One leave guard for the current page. main.js calls it before any route
+// change (sidebar, Back link, browser back). It returns true to continue.
+let leaveGuard = null;
+export function setLeaveGuard(fn) { leaveGuard = fn; }
+export function getLeaveGuard() { return leaveGuard; }
+
 export function parseRoute(hash) {
   const m = hash.match(/^#\/s\/([0-9a-f-]{36})(?:\/(\d+))?(?:\?(.*))?$/);
   if (!m) return null;
@@ -88,8 +94,8 @@ export function flash(target) {
 }
 
 // Sidebar. sections: [{ label, el }] for the current page (filled later).
-// onNavigate(href, ev): lets the page save before it leaves.
-export function sidebar({ id, n, maxStep, title, onNavigate }) {
+// Leaving is guarded centrally (setLeaveGuard + main.js route()).
+export function sidebar({ id, n, maxStep, title }) {
   const nav = el("nav", { class: "sidenav", "aria-label": "Session chapters" });
   const toggle = el("button", { type: "button", class: "sidenav-toggle", "aria-expanded": "false" },
     el("span", { text: `Step ${n} of 13 · ${chapterName(n)}` }), el("span", { class: "caret", "aria-hidden": "true", text: "▾" }));
@@ -101,7 +107,6 @@ export function sidebar({ id, n, maxStep, title, onNavigate }) {
     nav.classList.toggle("open", open);
   });
   const home = el("a", { href: "#", class: "sidenav-home", text: "← All sessions" });
-  home.addEventListener("click", (ev) => onNavigate?.("#", ev));
   panel.append(home,
     el("p", { class: "sidenav-title", text: title || "Session" }),
     el("p", { class: "sidenav-progress muted", text: `${Math.min(maxStep, 13)} of 13 chapters open` }));
@@ -117,25 +122,41 @@ export function sidebar({ id, n, maxStep, title, onNavigate }) {
       if (state === "locked") {
         li.append(el("span", { class: "chlink", "aria-disabled": "true", title: "Finish the earlier steps first" }, ...label));
       } else {
-        const a = el("a", { href: stepHref(id, c.n), class: "chlink", "aria-current": c.n === n ? "step" : null }, ...label);
-        a.addEventListener("click", (ev) => onNavigate?.(a.getAttribute("href"), ev));
-        li.append(a);
+        li.append(el("a", { href: stepHref(id, c.n), class: "chlink", "aria-current": c.n === n ? "step" : null }, ...label));
       }
       if (c.n === n) li.append(sectionList);
       ol.append(li);
     }
     panel.append(ol);
   }
+  if (maxStep < 13) panel.append(el("p", { class: "sidenav-hint muted", text: "Gray chapters open as you finish the steps before them." }));
   nav.append(toggle, panel);
+  let spy = null;
   nav.setSections = (items) => {
+    spy?.disconnect();
+    const buttons = new Map();
     sectionList.replaceChildren(...items.map(({ label, target }) => {
       const b = el("button", { type: "button", class: "seclink", text: label });
+      buttons.set(target, b);
       b.addEventListener("click", () => {
         scrollToEl(target); flash(target);
         if (window.matchMedia("(max-width: 899px)").matches) { toggle.setAttribute("aria-expanded", "false"); nav.classList.remove("open"); }
       });
       return el("li", {}, b);
     }));
+    // Scroll-spy: mark the section that is at the top part of the screen.
+    if ("IntersectionObserver" in window && items.length) {
+      spy = new IntersectionObserver((entries) => {
+        const top = entries.filter(e => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (!top) return;
+        for (const [t, b] of buttons) {
+          const on = t === top.target;
+          b.classList.toggle("active", on);
+          if (on) b.setAttribute("aria-current", "location"); else b.removeAttribute("aria-current");
+        }
+      }, { rootMargin: "-15% 0px -70% 0px" });
+      items.forEach(({ target }) => spy.observe(target));
+    }
   };
   return nav;
 }
