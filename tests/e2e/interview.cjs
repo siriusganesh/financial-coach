@@ -162,21 +162,31 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
   await p.waitForSelector('text=Step 9 of 13: Foundations');
   ok(db.sessions[0].status === 'analysis' && db.sessions[0].step === 9, 'session moves to analysis, step 9');
   ok(db.ledgers.length === 8 && db.ledgers.every((l, i) => l.version === i + 1), 'append-only versions 1..8');
-  await p.waitForSelector('text=B1. Employer match', { timeout: 90000 });
+  await p.waitForSelector('h2:has-text("Employer match")', { timeout: 90000 });
   const s9 = await p.textContent('#interview');
-  ok(/Method: code\. Passed\./.test(s9), 'Section 12 self-test passes in Pyodide');
-  ok(/B4\. Liquidity buffer/.test(s9) && !/\[(RULE|CALC|USER|DEFAULT|LIMIT)/.test(s9) && await p.locator('#interview code.num.src-calc').count() > 5 && await p.locator('#interview code.num.src-rule').count() > 0 && await p.locator('#interview .legend').count() === 1, 'foundations shown with tags');
-  ok(/Car.*4\.90%.*0-4\.99%/.test(s9), 'car debt in the 0-4.99% row');
+  ok(/Calculator check: passed\./.test(s9), 'Section 12 self-test passes in Pyodide');
+  ok(/Emergency fund/.test(s9) && !/\[(RULE|CALC|USER|DEFAULT|LIMIT)/.test(s9) && await p.locator('#interview code.num.src-calc').count() > 5 && await p.locator('#interview code.num.src-rule').count() > 0 && await p.locator('#interview .legend').count() === 1, 'foundations shown with tags');
+  ok(/Car: rate 4\.90%.*This rate is low/.test(s9), 'car debt in the low-rate row, in plain words');
+  { const vis = await p.evaluate(() => document.querySelector('#interview').innerText);
+    const jargon = vis.match(/α|γ|\bB[1-7]\b|H\/W|MAGI|\bPASS\b|\bFLAG\b|alpha|human capital/);
+    ok(!jargon, `step 9: no jargon outside "Show the math" (${jargon && jargon[0]})`);
+    await p.click('section.card:has(h2:has-text("Emergency fund")) summary');
+    ok(/B4:/.test(await p.evaluate(() => document.querySelector('#interview').innerText)), 'Show the math opens the technical detail'); }
   ok(db.plan_results.length === 1 && db.plan_results[0].ledger_version === 8 && /^[0-9a-f]{12}$/.test(db.plan_results[0].calculator_version), 'plan_results saved once with versions');
   await p.setViewportSize({ width: 375, height: 800 });
   ok(await p.evaluate(() => document.documentElement.scrollWidth) <= 375, 'no side scroll at 375 on step 9');
   if (process.env.SHOTS) await p.screenshot({ path: `${process.env.SHOTS}/step9-375.png`, fullPage: true });
   await p.setViewportSize({ width: 1100, height: 900 });
-  for (const [k, marker] of [[10, 'C8. Glide path'], [11, 'E5 and E6. Retirement'], [12, 'F1. Gate'], [13, 'Calculator report']]) {
+  for (const [k, marker] of [[10, 'How the stock share changes over time'], [11, 'Where your monthly saving goes'], [12, 'Borrowing to invest'], [13, 'Full calculator report']]) {
     await p.click('button:has-text("Continue")');
     await p.waitForSelector(`text=Step ${k} of 13`);
     await p.waitForSelector(`text=${marker}`, { timeout: 30000 });
     ok(true, `step ${k} renders ${marker}`);
+    if (k <= 12) {
+      const vis = await p.evaluate(() => document.querySelector('#interview').innerText);
+      const jargon = vis.match(/α|γ|\bB[1-7]\b|\bC[1-9]\b|\bE[1-8]\b|H\/W|MAGI|\bPASS\b|\bFLAG\b|alpha|human capital/);
+      ok(!jargon, `step ${k}: no jargon outside "Show the math" (${jargon && jargon[0]})`);
+    }
     if (process.env.SHOTS) await p.screenshot({ path: `${process.env.SHOTS}/step${k}.png`, fullPage: true });
   }
   const s13 = await p.textContent('#interview');
@@ -185,7 +195,7 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
   ok(db.sessions[0].status === 'done' && db.sessions[0].step === 13, 'session done at step 13');
   ok(db.plan_results.length === 1, 'same ledger and calculator version: no duplicate plan_results');
   ok(/does not send your name or email/.test(s13), 'AI privacy notice shown');
-  await p.click('button:has-text("Write sections 9 and 10")');
+  await p.click('button:has-text("Write next steps")');
   await p.waitForSelector('text=By 2026-11-15');
   ok(await p.locator('.ai-text code.num.src-calc').count() === 1, 'AI reply numbers shown as colored chips');
   ok(db.coachCalls[0].kind === 'narrative' && db.coachCalls[0].session_id === db.sessions[0].id && Object.keys(db.coachCalls[0]).length === 2, 'narrative call sends only session_id and kind');
