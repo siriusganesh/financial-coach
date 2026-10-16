@@ -4,6 +4,7 @@
 // data-col. Blank inputs read back as null ("I don't know").
 
 import { earnerCount, earnerName } from "./questions.js";
+import { renderTagged } from "./tags.js";
 
 let uid = 0;
 const nextId = () => `f${++uid}`;
@@ -13,7 +14,7 @@ function el(tag, attrs = {}, ...kids) {
   for (const [k, v] of Object.entries(attrs)) {
     if (v == null || v === false) continue;
     if (k === "class") n.className = v;
-    else if (k === "text") n.textContent = v;
+    else if (k === "text") n.append(renderTagged(v));
     else n.setAttribute(k, v === true ? "" : v);
   }
   for (const k of kids) if (k != null) n.append(k);

@@ -124,10 +124,10 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
   await p.click('text=Save and continue');
   await p.waitForSelector('text=Step 5 of 13');
   const txt = await p.textContent('table.cash');
-  ok(/Gap.*\$4,200/.test(txt) && /42% of take-home/.test(txt), 'cash check: 10000-3800-2000 = 4200 gap, 42%');
+  ok(/Gap.*\$4,200/.test(txt) && /42%.*of take-home/.test(txt) && !/\[CALC\]/.test(txt), 'cash check: 10000-3800-2000 = 4200 gap, 42%');
   ok(await p.isVisible('text=more than 5% of take-home'), 'gap warning shown');
   ok(await Q('gap').isVisible(), 'gap question shown when flagged');
-  ok(/You: retirement age 55.*Partner: retirement age 65 \[DEFAULT\]/.test(await Q('q17').textContent()), 'Q17 shows recorded ages, not asked again');
+  ok(/You: retirement age 55.*Partner: retirement age 65 \(default\)/.test(await Q('q17').textContent()), 'Q17 shows recorded ages, not asked again');
   await Q('gap').getByLabel('Answer').fill('Extra goes to checking, not tracked');
   await Q('q18').getByRole('button', { name: 'Add goal' }).click();
   const g = Q('q18').locator('.lrow');
@@ -154,9 +154,9 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
   await p.click('text=Save and continue');
   await p.waitForSelector('text=Step 8 of 13: Summary');
   const sum = await p.textContent('#interview');
-  ok(/Partner: Age: 32 \[USER\]/.test(sum), 'summary per person');
-  ok(/Partner: Retirement age: 65 \[DEFAULT\]/.test(sum), 'defaults listed');
-  ok(/Goal "Condo": priority 2 \[DEFAULT\]/.test(sum), 'goal priority default listed');
+  ok(/Partner: Age: 32 \(your input\)/.test(sum), 'summary per person');
+  ok(/Partner: Retirement age: 65 \(default\)/.test(sum), 'defaults listed');
+  ok(/Goal "Condo": priority 2 \(default\)/.test(sum), 'goal priority default listed');
   ok(/Is this correct\? What should I change\?/.test(sum), 'runner step 8 question');
   await p.click('text=This is correct');
   await p.waitForSelector('text=Step 9 of 13: Foundations');
@@ -165,7 +165,7 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
   await p.waitForSelector('text=B1. Employer match', { timeout: 90000 });
   const s9 = await p.textContent('#interview');
   ok(/Method: code\. Passed\./.test(s9), 'Section 12 self-test passes in Pyodide');
-  ok(/B4\. Liquidity buffer/.test(s9) && /\[RULE\]/.test(s9) && /\[CALC\]/.test(s9), 'foundations shown with tags');
+  ok(/B4\. Liquidity buffer/.test(s9) && !/\[(RULE|CALC|USER|DEFAULT|LIMIT)/.test(s9) && await p.locator('#interview code.num.src-calc').count() > 5 && await p.locator('#interview code.num.src-rule').count() > 0 && await p.locator('#interview .legend').count() === 1, 'foundations shown with tags');
   ok(/Car.*4\.90%.*0-4\.99%/.test(s9), 'car debt in the 0-4.99% row');
   ok(db.plan_results.length === 1 && db.plan_results[0].ledger_version === 8 && /^[0-9a-f]{12}$/.test(db.plan_results[0].calculator_version), 'plan_results saved once with versions');
   await p.setViewportSize({ width: 375, height: 800 });
@@ -181,11 +181,13 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
   }
   const s13 = await p.textContent('#interview');
   ok(/SNAPSHOT/.test(s13) && /Federal bracket/.test(s13), 'final output has report and assumptions');
+  ok(!/\[(CALC|USER|DEFAULT|RULE)\]/.test(s13), 'no raw source tags on step 13');
   ok(db.sessions[0].status === 'done' && db.sessions[0].step === 13, 'session done at step 13');
   ok(db.plan_results.length === 1, 'same ledger and calculator version: no duplicate plan_results');
   ok(/does not send your name or email/.test(s13), 'AI privacy notice shown');
   await p.click('button:has-text("Write sections 9 and 10")');
   await p.waitForSelector('text=By 2026-11-15');
+  ok(await p.locator('.ai-text code.num.src-calc').count() === 1, 'AI reply numbers shown as colored chips');
   ok(db.coachCalls[0].kind === 'narrative' && db.coachCalls[0].session_id === db.sessions[0].id && Object.keys(db.coachCalls[0]).length === 2, 'narrative call sends only session_id and kind');
   await p.fill('#aiq', 'Why is my buffer 15 months?');
   await p.click('button:has-text("Ask")');

@@ -250,7 +250,7 @@ export const STEPS = [
           `${i ? "Partner" : "You"}: retirement age ${e.ret_age ?? "65 [DEFAULT]"} (from Q6)`),
         fields: [
           { key: "ret_spending", type: "money", scope: "hh", label: "Yearly spending in retirement", unit: "/yr",
-            hint: "Blank = current spending minus costs that end first [DEFAULT]" },
+            hint: "Blank = [DEFAULT] current spending minus costs that end first" },
           { key: "ret_includes_ending", type: "radio", scope: "hh", label: "Includes payments or child costs that end before then?",
             options: [["yes", "Yes"], ["no", "No"]], show: (A) => A.hh.ret_spending != null },
         ] },

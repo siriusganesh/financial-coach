@@ -5,6 +5,7 @@
 import { STEPS, earnerCount, earnerName } from "./questions.js";
 import { renderQuestions, collect, applyVisibility, fmtMoney } from "./form.js";
 import { cashCheck } from "./cashflow.js";
+import { renderTagged, legend } from "./tags.js";
 import { renderAnalysis, ANALYSIS_TITLES } from "./analysis.js";
 
 const SCHEMA = 1;
@@ -14,9 +15,9 @@ function h(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (v == null || v === false) continue;
-    if (k === "class") n.className = v; else if (k === "text") n.textContent = v; else n.setAttribute(k, v);
+    if (k === "class") n.className = v; else if (k === "text") n.append(renderTagged(v)); else n.setAttribute(k, v);
   }
-  for (const k of kids) if (k != null) n.append(k);
+  for (const k of kids) if (k != null) n.append(typeof k === "string" ? renderTagged(k) : k);
   return n;
 }
 
@@ -57,7 +58,7 @@ function cashTable(cc) {
     for (const [n, v] of cc.payLines) t.append(row(`  − payroll: ${n}`, fmtMoney(v) + " [USER]"));
     t.append(row("− Payroll total", fmtMoney(cc.D) + " [CALC]", "strong"));
   }
-  t.append(row("= Gap", `${cc.gap < 0 ? "−" : ""}${fmtMoney(Math.abs(cc.gap))} (${cc.pct}% of take-home) [CALC]`, "total"));
+  t.append(row("= Gap", `${cc.gap < 0 ? "−" : ""}${fmtMoney(Math.abs(cc.gap))} [CALC] (${cc.pct}% [CALC] of take-home)`, "total"));
   const box = h("section", { class: "q cashcheck" }, h("h2", { text: "Cash-flow check (reference Section 4)" }),
     h("p", { class: "muted", text: "Each dollar is in one line only. Yearly costs and employer match are not in this monthly check." }), t);
   if (cc.flag) box.append(h("p", { class: "warn", text: `The gap is more than 5% of take-home. Go back to Step 4 to fix a line, or answer below.` }));
@@ -164,6 +165,7 @@ export async function showInterview(sb, root, sessionId, stepParam, nav) {
 
   let ctx = {};
   let body;
+  if (step.cashCheck || step.summary) page.append(legend());
   if (step.cashCheck) {
     const cc = cashCheck(st.A);
     ctx = { gapFlag: cc.flag };
