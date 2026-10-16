@@ -257,9 +257,10 @@ export function step11(o) {
     [`If you keep saving as you do now, you would have about ${$m(r.projected)} when you retire at ${pj.first_retirement_e1_age}.`,
      ...(sup4 != null ? [`That could pay for about ${$m(sup4)} a year of spending, in today's dollars. This counts Social Security and pensions, and assumes you take out 4% [DEFAULT] of your savings each year.`] : []),
      `You plan to spend ${$m(r.spending, r.spending_source.startsWith("user") ? "USER" : "DEFAULT")} a year.`,
+     ...(need4 === 0 ? ["Your pensions and Social Security pay for all of that spending, so you do not need savings for it."] : []),
      STATUS[r.status] ?? r.status],
     [p(`E5 need = (spending − permanent income) / wr + gap years before Social Security or pension. Spending source: ${r.spending_source}.${r.removed_costs.length ? " Removed: " + r.removed_costs.map(([n, v]) => `${n} ${fmtMoney(v)}/mo`).join(", ") + "." : ""} Social Security: ${Object.entries(r.ss_by_earner).map(([n, v]) => `${n} ${fmtMoney(v)}/yr`).join(", ")}.`),
-     p(`E6: projected ${fmtMoney(r.projected)} ÷ need at 4% ${fmtMoney(need4)} = ${r.pct}% → ${r.status}. Supported spending = highest spending whose need at that rate is covered by the projected savings (search on plan()).`),
+     p(`E6: ${need4 === 0 ? "need at 4% is $0 (permanent income covers spending)" : `projected ${fmtMoney(r.projected)} ÷ need at 4% ${fmtMoney(need4)} = ${r.pct}%`} → ${r.status}. Supported spending = highest spending whose need at that rate is covered by the projected savings (search on plan()).`),
      table(["Withdrawal rate", "Steady need", "Gap years", "Total need", "Spending it supports"], Object.entries(r.need).map(([wr, [s, g, t]]) =>
        [`${(Number(wr) * 100).toFixed(1)}% [DEFAULT]`, $m(s), $m(g), $m(t), sup[wr] != null ? `${$m(sup[wr])}/yr` : "n/a"]))]));
 

@@ -147,6 +147,17 @@ class Mapping(unittest.TestCase):
                                     json.dumps(LIMITS), "2026-10-15"))
         self.assertFalse(bad["ok"])
 
+    def test_run_output_is_strict_json(self):
+        # Pension covers all spending: need is $0 and plan() gives pct = inf.
+        a = copy.deepcopy(TEST_ANSWERS)
+        a["hh"]["ret_spending"] = 20000
+        a["earners"][0].update(pension_annual=60000, pension_start_age=50)
+        s = ledger.run(json.dumps(a), json.dumps(LIMITS), "2026-10-15")
+        out = json.loads(s, parse_constant=lambda c: self.fail(f"{c} in output"))
+        self.assertTrue(out["ok"], out.get("error"))
+        self.assertIsNone(out["results"]["retirement"]["pct"])
+        self.assertEqual(out["results"]["retirement"]["status"], "On track")
+
     def test_supported_spending(self):
         L, _ = ledger.build_ledger(copy.deepcopy(TEST_ANSWERS), LIMITS, TODAY)
         R, _ = c.plan(copy.deepcopy(L))
