@@ -5,7 +5,7 @@
 
 import { fmtMoney } from "./form.js";
 import { renderTagged, legend } from "./tags.js";
-import { step9, step10, step11, step12, card } from "./plain-steps.js";
+import { step9, step10, step11, step12, card, setEditContext } from "./plain-steps.js";
 
 let worker = null, seq = 0;
 const pending = new Map();
@@ -192,6 +192,7 @@ export async function renderAnalysis(sb, st, n, sessionId, page, save) {
       h("p", {}, h("a", { href: `#/s/${sessionId}/8`, text: "Go to the summary to change an answer" })));
     return;
   }
+  setEditContext(sessionId, n);
   body.replaceChildren(p(INTRO[n], "intro"), legend(), ...RENDER[n](o, { sb, st }), p(`Calculator version ${o.calcVersion}, answers version ${st.version}.`, "muted small"));
   if (n < 13) {
     const go = h("button", { type: "button", text: "Continue" });

@@ -6,7 +6,8 @@ import { STEPS, earnerCount, earnerName } from "./questions.js";
 import { renderQuestions, collect, applyVisibility, fmtMoney } from "./form.js";
 import { cashCheck } from "./cashflow.js";
 import { renderTagged, legend } from "./tags.js";
-import { renderAnalysis, ANALYSIS_TITLES } from "./analysis.js";
+import { renderAnalysis } from "./analysis.js";
+import { sidebar, chapterName, changeLinks, stepHref, QUESTIONS, scrollToEl, flash } from "./nav.js";
 
 const SCHEMA = 1;
 const blankAnswers = () => ({ hh: {}, earners: [{}] });
@@ -82,7 +83,7 @@ function summary(A, sid) {
   const defaults = [];
   const n = earnerCount(A);
   for (const step of STEPS.filter(s => s.n < 8)) {
-    const sec = h("section", { class: "q" }, h("h2", { text: `Step ${step.n}: ${step.title}` }));
+    const sec = h("section", { class: "q", "data-chapter": step.n }, h("h2", { text: `Step ${step.n}: ${chapterName(step.n)}` }));
     for (const q of step.questions) {
       if (q.id === "gap" && !A.hh.gap_note) continue;
       const lines = [];
@@ -109,9 +110,10 @@ function summary(A, sid) {
         }
       }
       const qn = q.id.startsWith("q") ? `${q.id.slice(1)}. ` : "";
-      sec.append(h("h3", { text: qn + q.text }), h("ul", { class: "facts" }, ...lines.map(l => h("li", { text: l }))));
+      sec.append(h("div", { class: "qhead" }, h("h3", { text: qn + q.text }),
+        h("a", { href: stepHref(sid, step.n, { q: q.id, ret: 8 }), class: "change", "aria-label": `Change: ${QUESTIONS[q.id]?.[1] ?? q.id}`, text: "Change" })),
+        h("ul", { class: "facts" }, ...lines.map(l => h("li", { text: l }))));
     }
-    sec.append(h("a", { href: `#/s/${sid}/${step.n}`, class: "edit", text: `Change Step ${step.n}` }));
     box.append(sec);
   }
   const dsec = h("section", { class: "q" }, h("h2", { text: "Defaults that will be used" }));
@@ -122,7 +124,8 @@ function summary(A, sid) {
 }
 
 // ---------- page ----------
-export async function showInterview(sb, root, sessionId, stepParam, nav) {
+// opts: { q: question id to jump to, ret: step to return to after saving }
+export async function showInterview(sb, root, sessionId, stepParam, nav, opts = {}) {
   root.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
   let st;
   try { st = await loadSession(sb, sessionId); } catch (e) {
@@ -133,17 +136,28 @@ export async function showInterview(sb, root, sessionId, stepParam, nav) {
   const maxStep = Math.min(st.session.step, 13);
   let n = Number(stepParam) || Math.min(st.session.step, 13);
   if (n > maxStep) n = maxStep;
-  const title = n <= 8 ? STEPS[n - 1].title : ANALYSIS_TITLES[n];
-  const head = h("div", { class: "stephead" },
-    h("p", { class: "progress", text: `Step ${n} of 13: ${title}` }),
-    h("nav", { class: "steps", "aria-label": "Steps" },
-      ...Array.from({ length: 13 }, (_, i) => i + 1).map(k => k <= maxStep
-        ? h("a", { href: `#/s/${sessionId}/${k}`, class: k === n ? "on" : null, "aria-current": k === n ? "step" : null, text: String(k) })
-        : h("span", { class: "off", text: String(k) }))));
+  const ret = opts.ret && opts.ret !== n && opts.ret <= maxStep ? opts.ret : null;
+
+  // Leaving a form page from the sidebar saves first (no lost answers).
+  let leave = null;                                  // set below for form pages
+  const side = sidebar({ id: sessionId, n, maxStep, title: st.session.title,
+    onNavigate: (href, ev) => { if (leave) leave(href, ev); } });
+  const content = h("div", { class: "content" });
+  root.replaceChildren(h("div", { class: "layout" }, side, content));
+  const head = h("div", { class: "stephead" }, h("h1", { class: "progress", text: `Step ${n} of 13: ${chapterName(n)}` }));
+  const returnBar = ret ? h("p", { class: "returnbar" }, `You came from Step ${ret}: ${chapterName(ret)}. `,
+    h("a", { href: stepHref(sessionId, ret), text: "Go back without changes" })) : null;
+  const sectionsOf = (page) => [...page.querySelectorAll("section.q, section.card")]
+    .filter(sec => !sec.hidden && sec.querySelector("h2"))
+    .map(sec => ({ target: sec, label: sec.dataset.label || sec.querySelector("h2").firstChild.textContent.trim() }));
+  const jump = (page) => {
+    const t = opts.q && page.querySelector(`section[data-q="${opts.q}"]`);
+    if (t) { scrollToEl(t); flash(t); } else window.scrollTo(0, 0);
+  };
 
   if (n >= 9) {
-    const page = h("div", { class: "panel interview" }, head);
-    root.replaceChildren(page);
+    const page = h("div", { class: "panel interview" }, head, returnBar);
+    content.append(page);
     window.scrollTo(0, 0);
     await renderAnalysis(sb, st, n, sessionId, page, async (next) => {
       const step = Math.max(st.session.step, next);
@@ -152,10 +166,12 @@ export async function showInterview(sb, root, sessionId, stepParam, nav) {
       if (error) { page.append(h("p", { class: "msg", text: `Could not save: ${error.message}` })); return; }
       nav(`#/s/${sessionId}/${next}`);
     });
+    side.setSections(sectionsOf(page));
     return;
   }
   const step = STEPS[n - 1];
-  const page = h("form", { class: "panel interview", novalidate: "" }, head);
+  const page = h("form", { class: "panel interview", novalidate: "" }, head, returnBar);
+  content.append(page);
 
   if (n === 1) {
     page.append(h("p", { class: "disclaimer", text: "I am a personal finance educator, not a licensed advisor. This is education, not advice." }),
@@ -169,18 +185,25 @@ export async function showInterview(sb, root, sessionId, stepParam, nav) {
   if (step.cashCheck) {
     const cc = cashCheck(st.A);
     ctx = { gapFlag: cc.flag };
-    page.append(cashTable(cc));
+    const t = cashTable(cc);
+    t.dataset.label = "Budget check";
+    t.append(changeLinks(sessionId, ["q12", "q13", "q14"], 5));
+    page.append(t);
   }
   if (step.summary) {
     page.append(summary(st.A, sessionId), h("p", { class: "ask", text: "Is this correct? What should I change?" }));
   } else {
     body = renderQuestions(step, st.A, ctx);
+    for (const sec of body.querySelectorAll("section.q[data-q]")) {
+      const name = QUESTIONS[sec.dataset.q]?.[1];
+      if (name) sec.dataset.label = name;
+    }
     page.append(body);
   }
 
   const msg = h("p", { class: "msg", role: "status", "aria-live": "polite" });
   const back = n > 1 ? h("a", { href: `#/s/${sessionId}/${n - 1}`, class: "btnlink", text: "Back" }) : h("a", { href: "#", class: "btnlink", text: "Sessions" });
-  const go = h("button", { type: "submit", text: step.summary ? "This is correct" : "Save and continue" });
+  const go = h("button", { type: "submit", text: ret ? `Save and return to Step ${ret}` : step.summary ? "This is correct" : "Save and continue" });
   page.append(h("div", { class: "actions" }, back, go), msg);
 
   // Live show/hide of conditional fields. Partner on/off changes the
@@ -197,12 +220,37 @@ export async function showInterview(sb, root, sessionId, stepParam, nav) {
       applyVisibility(body, A, ctx);
     });
   }
+  let dirty = false;
+  if (body) {
+    page.addEventListener("input", () => { dirty = true; });
+    page.addEventListener("change", () => { dirty = true; });
+    page.addEventListener("click", (ev) => { if (ev.target.closest(".lrow .rm, .list-field > button")) dirty = true; });
+    leave = async (href, ev) => {
+      if (!dirty) return;                            // nothing to save: follow the link
+      ev.preventDefault();
+      const { A, errors } = collect(body, st.A, ctx);
+      if (errors) {
+        msg.replaceChildren(`Some answers on this page need fixing (${errors} marked in red). Fix them, or `,
+          h("a", { href, class: "leave-anyway", text: "leave without saving" }), ".");
+        body.querySelector(".bad input, .bad select, .bad textarea")?.focus();
+        msg.querySelector(".leave-anyway").addEventListener("click", () => { dirty = false; });
+        return;
+      }
+      msg.textContent = "Saving…";
+      try { await save(sb, st, A, n); dirty = false; location.hash = href; }
+      catch (e) { msg.textContent = `Could not save: ${e.message}`; }
+    };
+  }
+  side.setSections(sectionsOf(page));
+  requestAnimationFrame(() => jump(page));
+
   page.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     go.disabled = true;
     msg.textContent = "Saving…";
     try {
       if (step.summary) {
+        if (ret) { nav(`#/s/${sessionId}/${ret}`); return; }
         await save(sb, st, st.A, 9, { status: "analysis" });
         nav(`#/s/${sessionId}/9`);
         return;
@@ -213,8 +261,9 @@ export async function showInterview(sb, root, sessionId, stepParam, nav) {
         body.querySelector(".bad input, .bad select, .bad textarea")?.focus();
         return;
       }
-      await save(sb, st, A, n + 1);
-      nav(`#/s/${sessionId}/${n + 1}`);
+      await save(sb, st, A, ret ? n : n + 1);
+      dirty = false;
+      nav(ret ? `#/s/${sessionId}/${ret}` : `#/s/${sessionId}/${n + 1}`);
     } catch (e) {
       msg.textContent = `Could not save: ${e.message}`;
     } finally {
@@ -222,8 +271,6 @@ export async function showInterview(sb, root, sessionId, stepParam, nav) {
     }
   });
 
-  root.replaceChildren(page);
-  window.scrollTo(0, 0);
 }
 
 

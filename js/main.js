@@ -1,5 +1,6 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { showInterview } from "./interview.js";
+import { parseRoute } from "./nav.js";
 
 const $ = (id) => document.getElementById(id);
 const views = ["loading", "setup", "signIn", "home", "interview"];
@@ -82,10 +83,10 @@ async function newSession() {
 // Routes: "" or "#" = session list; "#/s/<id>[/<step>]" = interview.
 async function route() {
   if (!currentUser) { show("signIn"); return; }
-  const m = location.hash.match(/^#\/s\/([0-9a-f-]{36})(?:\/(\d+))?$/);
-  if (m) {
+  const r = parseRoute(location.hash);
+  if (r) {
     show("interview");
-    await showInterview(sb, $("interview"), m[1], m[2], (h) => { location.hash = h; });
+    await showInterview(sb, $("interview"), r.id, r.step, (h) => { location.hash = h; }, { q: r.q, ret: r.ret });
     return;
   }
   show("home");
