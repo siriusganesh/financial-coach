@@ -1,0 +1,2 @@
+pyodide 314.0.7 from npm (https://www.npmjs.com/package/pyodide), core files only.
+Only the Python standard library is used; no extra packages are loaded.

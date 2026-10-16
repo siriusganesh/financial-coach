@@ -114,3 +114,14 @@ table.cash tr.total td { font-weight: 700; border-bottom: none; }
 .facts { margin: 0 0 8px; padding-left: 18px; font-size: .9rem; }
 .ask { font-weight: 600; }
 .list a { color: var(--accent); }
+.steps { flex-wrap: wrap; }
+.tablewrap { overflow-x: auto; max-width: 100%; }
+table.data { width: 100%; border-collapse: collapse; font-size: .85rem; }
+table.data th { text-align: left; font-weight: 600; border-bottom: 2px solid var(--border); padding: 4px 8px 4px 0; }
+table.data td { border-bottom: 1px solid var(--border); padding: 4px 8px 4px 0; vertical-align: top; }
+.badge { display: inline-block; font-size: .8rem; font-weight: 600; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border); }
+.badge.pass { color: #1e7b45; border-color: #1e7b45; }
+.badge.flag { color: #b5521b; border-color: #b5521b; }
+@media (prefers-color-scheme: dark) { .badge.pass { color: #6fd39a; border-color: #6fd39a; } .badge.flag { color: #f0a070; border-color: #f0a070; } }
+pre.report { white-space: pre-wrap; word-break: break-word; font-size: .8rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+.small { font-size: .8rem; }

@@ -9,8 +9,9 @@ Education, not advice. The coach is not a licensed financial advisor, tax profes
 | Part | Job |
 |---|---|
 | App (this repo, static, GitHub Pages) | Owns the 13-step script and the exact question wording (`coach/coach-runner.md`). |
-| `coach/coach_calculator.py` | Does all math. Runs in the browser in Pyodide (planned). Deterministic. |
-| Gemini, through a Supabase Edge Function (planned) | Parses free-text answers into ledger fields, and explains `plan()` results. Never computes numbers. |
+| `coach/coach_calculator.py` | Does all math. Runs unchanged in the browser in Pyodide (`js/calc-worker.js`). Deterministic. |
+| `coach/ledger.py` | Maps the interview answers to the `plan()` ledger and lists every assumption. |
+| Gemini (free tier), through a Supabase Edge Function (planned) | Explains `plan()` results and answers follow-up questions. Never computes numbers. Gets no name, email, or user ID. |
 | Supabase | Auth (magic link, invite-only) and storage. Row-level security limits every row to its owner. |
 
 The Gemini API key lives only in Supabase Edge Function secrets. It is never in this repo or in the browser.
@@ -21,9 +22,12 @@ The Gemini API key lives only in Supabase Edge Function secrets. It is never in 
 index.html, css/, js/        front end (ES modules, no build step)
 js/config.js                 Supabase URL and anon key (public values)
 vendor/supabase.min.js       supabase-js UMD bundle
+vendor/pyodide/              Pyodide core (self-hosted, standard library only)
 coach/                       runner script, reference playbook, calculator
 supabase/schema.sql          tables, RLS, 2026 tax-limit seed
 tests/test_calculator.py     Section 12 self-test of the calculator
+tests/test_ledger.py         answers -> ledger mapping, 2026 brackets
+tests/e2e/                   Playwright run of all 13 steps against a mocked Supabase
 tests/rls/                   RLS tests (CI runs them against Postgres 16)
 ```
 
@@ -40,7 +44,7 @@ tests/rls/                   RLS tests (CI runs them against Postgres 16)
 
 ## Each tax year
 
-Add a `tax_limits` row for the new year (coach-reference.md Section 2) in the SQL editor. Cite the IRS source in `source`.
+Add a `tax_limits` row for the new year: the Section 2 values plus `brackets` and `std_deduction` (IRS Rev. Proc. for that year). Copy the 2026 seed in `schema.sql` as the pattern, and cite the IRS source in `source`. Until a row exists, the app uses the latest earlier year and says the limits may be outdated.
 
 ## Local run
 
