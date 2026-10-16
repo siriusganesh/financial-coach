@@ -11,7 +11,7 @@ Education, not advice. The coach is not a licensed financial advisor, tax profes
 | App (this repo, static, GitHub Pages) | Owns the 13-step script and the exact question wording (`coach/coach-runner.md`). |
 | `coach/coach_calculator.py` | Does all math. Runs unchanged in the browser in Pyodide (`js/calc-worker.js`). Deterministic. |
 | `coach/ledger.py` | Maps the interview answers to the `plan()` ledger and lists every assumption. |
-| Gemini (free tier), through a Supabase Edge Function (planned) | Explains `plan()` results and answers follow-up questions. Never computes numbers. Gets no name, email, or user ID. |
+| Gemini (free tier), through the Supabase Edge Function `supabase/functions/coach` | Explains `plan()` results and answers follow-up questions. Never computes numbers. Gets no name, email, or user ID. |
 | Supabase | Auth (magic link, invite-only) and storage. Row-level security limits every row to its owner. |
 
 The Gemini API key lives only in Supabase Edge Function secrets. It is never in this repo or in the browser.
@@ -41,6 +41,14 @@ tests/rls/                   RLS tests (CI runs them against Postgres 16)
    - Redirect URLs: add the Site URL and `http://localhost:8000/**` for local testing.
 5. Project Settings > API: copy the project URL and the anon (public) key into `js/config.js`.
 6. To add a user: Authentication > Users > Invite user.
+
+## AI explainer (Edge Function)
+
+`supabase/functions/coach` writes Step 13 items 9 and 10 and answers follow-up questions. It reads the saved `plan_results` as the signed-in user (RLS), sends Gemini only the results, assumptions, report, and question, and checks every reply: numbers must come from the results and carry a tag; no fund, ticker, broker, or insurer names; no praise. A failed check gets one retry; a second failure is shown with a warning.
+
+Secrets (Edge Functions > Secrets): `GEMINI_API_KEY` (required), `GEMINI_MODEL` (default `gemini-3.8-flash`), `QUOTA_PER_DAY` (default 50).
+
+Deploy: `supabase functions deploy coach --project-ref <ref>`. After a change to reference Section 13, run `python3 scripts/gen_research.py`.
 
 ## Each tax year
 

@@ -66,4 +66,20 @@ do $$ begin
   assert (select count(*) from tax_limits) = 0, 'anon sees tax_limits';
 end $$;
 
+-- AI quota functions: only the service role may call them
+reset role;
+set role authenticated;
+select pg_temp.must_fail('select public.use_quota(''00000000-0000-0000-0000-00000000000a'', 50)');
+reset role;
+set role service_role;
+do $$ declare n int; begin
+  n := public.use_quota('00000000-0000-0000-0000-00000000000a', 2); assert n = 1, 'quota first';
+  n := public.use_quota('00000000-0000-0000-0000-00000000000a', 2); assert n = 2, 'quota second';
+  n := public.use_quota('00000000-0000-0000-0000-00000000000a', 2); assert n is null, 'quota over limit returns null';
+  perform public.add_tokens('00000000-0000-0000-0000-00000000000a', 100, 20);
+  assert (select requests from public.usage where user_id = '00000000-0000-0000-0000-00000000000a') = 2, 'no increment past limit';
+  assert (select tokens_out from public.usage where user_id = '00000000-0000-0000-0000-00000000000a') = 20, 'tokens added';
+end $$;
+reset role;
+
 \echo RLS tests passed

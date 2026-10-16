@@ -181,14 +181,91 @@ function step12(o) {
   return out;
 }
 
-function step13(o) {
+const AI_NOTICE = "This part uses Google's Gemini (free tier). It sends the calculator results, the assumptions, and your question. "
+  + "It does not send your name or email. Google may use this text to improve its products, and people may review it. "
+  + "Do not type names, account numbers, or other details that identify you.";
+
+async function invokeCoach(sb, body) {
+  const { data, error } = await sb.functions.invoke("coach", { body });
+  if (!error) return data;
+  let msg = error.message;
+  try { msg = (await error.context.json()).error || msg; } catch { /* keep message */ }
+  throw new Error(msg);
+}
+
+function replyBlock(text, check) {
+  const box = h("div", { class: "ai-reply" }, h("div", { class: "ai-text", text }));
+  if (check && !check.ok) {
+    box.append(h("p", { class: "warn", text: "The reply check found problems. Treat this text with care: "
+      + check.problems.join("; ") }));
+  }
+  return box;
+}
+
+function step13(o, { sb, st }) {
+  const narrative = h("div", { class: "ai" }, p("Loading…", "muted"));
+  const thread = h("div", { class: "thread" });
+  const ask = h("form", { class: "ask-form", novalidate: "" },
+    h("label", { for: "aiq", class: "flabel", text: "Ask a follow-up question about these results" }),
+    h("textarea", { id: "aiq", rows: 3, maxlength: 1000 }),
+    h("div", { class: "actions" }, h("span", { class: "muted small", id: "aiquota" }), h("button", { type: "submit", text: "Ask" })),
+    h("p", { class: "msg", role: "status", "aria-live": "polite" }));
+  const msg = ask.querySelector(".msg");
+
+  const showNarrative = (text, check) => narrative.replaceChildren(replyBlock(text, check));
+  const writeBtn = h("button", { type: "button", text: "Write sections 9 and 10" });
+  writeBtn.addEventListener("click", async () => {
+    writeBtn.disabled = true;
+    narrative.append(p("Writing… this can take up to a minute.", "muted"));
+    try {
+      const r = await invokeCoach(sb, { session_id: st.session.id, kind: "narrative" });
+      showNarrative(r.text, r.check);
+      ask.querySelector("#aiquota").textContent = `AI requests today: ${r.used_today} of ${r.quota}`;
+    } catch (e) {
+      narrative.replaceChildren(p(e.message, "warn"), writeBtn);
+      writeBtn.disabled = false;
+    }
+  });
+
+  ask.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const q = ask.querySelector("#aiq").value.trim();
+    if (!q) { msg.textContent = "Type a question."; return; }
+    const btn = ask.querySelector("button");
+    btn.disabled = true; msg.textContent = "Thinking…";
+    try {
+      const r = await invokeCoach(sb, { session_id: st.session.id, kind: "followup", question: q });
+      thread.append(h("p", { class: "q-user", text: q }), replyBlock(r.text, r.check));
+      ask.querySelector("#aiq").value = "";
+      msg.textContent = "";
+      ask.querySelector("#aiquota").textContent = `AI requests today: ${r.used_today} of ${r.quota}`;
+    } catch (e) {
+      msg.textContent = e.message;
+    } finally { btn.disabled = false; }
+  });
+
+  // Earlier AI turns for this session.
+  (async () => {
+    const { data, error } = await sb.from("messages").select("role, content").eq("session_id", st.session.id)
+      .eq("step", 13).order("id", { ascending: true });
+    if (error) { narrative.replaceChildren(p(error.message, "warn")); return; }
+    let last = null;
+    for (const m of data) {
+      if (m.role === "model" && m.content.startsWith("[narrative]\n")) last = m.content.slice(12);
+      else if (m.role === "user") thread.append(h("p", { class: "q-user", text: m.content }));
+      else thread.append(replyBlock(m.content));
+    }
+    if (last) narrative.replaceChildren(replyBlock(last), h("p", {}, Object.assign(writeBtn, { textContent: "Write again" })));
+    else narrative.replaceChildren(writeBtn);
+  })();
+
   return [
     p("DISCLAIMER: Educational model only. Not financial, tax, or legal advice."),
     p(`Limits used: ${o.limitsYear} from ${o.limitsSource}${o.limitsYear < new Date().getFullYear() ? " (may be outdated: verify at irs.gov)" : ""}.`),
     sec("Calculator report (plan())", h("pre", { class: "report", text: o.report })),
     sec("8. Assumptions used", h("ul", { class: "facts" }, ...o.assumptions.map(a => h("li", { text: a })))),
-    sec("9 and 10. Next things to check, and what would change this plan",
-      p("These parts are written in plain language by the AI explainer, which is the next build.", "muted")),
+    sec("9 and 10. Next things to check, and what would change this plan", p(AI_NOTICE, "notice"), narrative),
+    sec("Follow-up questions", thread, ask),
     p("Change any input and I will rerun the numbers.", "ask"),
   ];
 }
@@ -208,7 +285,7 @@ export async function renderAnalysis(sb, st, n, sessionId, page, save) {
       h("p", {}, h("a", { href: `#/s/${sessionId}/8`, text: "Go to the summary to change an answer" })));
     return;
   }
-  body.replaceChildren(...RENDER[n](o), p(`Calculator version ${o.calcVersion}, answers version ${st.version}.`, "muted small"));
+  body.replaceChildren(...RENDER[n](o, { sb, st }), p(`Calculator version ${o.calcVersion}, answers version ${st.version}.`, "muted small"));
   if (n < 13) {
     const go = h("button", { type: "button", text: "Continue" });
     const back = h("a", { href: `#/s/${sessionId}/${n - 1}`, class: "btnlink", text: "Back" });

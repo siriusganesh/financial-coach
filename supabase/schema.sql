@@ -167,6 +167,34 @@ create policy "usage own select" on public.usage
   for select to authenticated using (auth.uid() = user_id);
 
 -- =====================================================================
+-- AI quota (Edge Function "coach" calls these with the service role key)
+-- =====================================================================
+
+-- Adds one request for today. Returns the new count, or null when the user
+-- already reached p_limit (no increment in that case).
+create or replace function public.use_quota(p_user uuid, p_limit int) returns int
+language plpgsql security definer set search_path = '' as $$
+declare n int;
+begin
+  insert into public.usage (user_id, day, requests) values (p_user, current_date, 1)
+  on conflict (user_id, day) do update set requests = public.usage.requests + 1
+    where public.usage.requests < p_limit
+  returning requests into n;
+  return n;
+end $$;
+
+create or replace function public.add_tokens(p_user uuid, p_in bigint, p_out bigint) returns void
+language sql security definer set search_path = '' as $$
+  update public.usage set tokens_in = tokens_in + p_in, tokens_out = tokens_out + p_out
+  where user_id = p_user and day = current_date;
+$$;
+
+revoke all on function public.use_quota(uuid, int) from public, anon, authenticated;
+revoke all on function public.add_tokens(uuid, bigint, bigint) from public, anon, authenticated;
+grant execute on function public.use_quota(uuid, int) to service_role;
+grant execute on function public.add_tokens(uuid, bigint, bigint) to service_role;
+
+-- =====================================================================
 -- seed: tax year 2026 (coach-reference.md Section 2, plus federal brackets)
 -- Keys match LEDGER_TEMPLATE["limits"] in coach_calculator.py, plus the
 -- catch-up and phase-out values the account plan needs.
