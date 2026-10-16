@@ -46,7 +46,7 @@ tests/rls/                   RLS tests (CI runs them against Postgres 16)
 
 `supabase/functions/coach` writes Step 13 items 9 and 10 and answers follow-up questions. It reads the saved `plan_results` as the signed-in user (RLS), sends Gemini only the results, assumptions, report, and question, and checks every reply: numbers must come from the results and carry a tag; no fund, ticker, broker, or insurer names; no praise. A failed check gets one retry; a second failure is shown with a warning.
 
-Secrets (Edge Functions > Secrets): `GEMINI_API_KEY` (required), `GEMINI_MODEL` (default `gemini-3.8-flash`), `QUOTA_PER_DAY` (default 50).
+Secrets (Edge Functions > Secrets): `GEMINI_API_KEY` (required), `GEMINI_MODEL` (default `gemini-3.8-flash`), `GEMINI_FALLBACK_MODELS` (default `gemini-3.6-flash,gemini-3.5-flash-lite`), `QUOTA_PER_DAY` (default 50).
 
 Deploy: `supabase functions deploy coach --project-ref <ref>`. After a change to reference Section 13, run `python3 scripts/gen_research.py`.
 
