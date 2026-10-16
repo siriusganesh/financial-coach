@@ -4,6 +4,7 @@
 // Privacy: Gemini gets the calculator results, the assumptions, and the
 // question. It never gets the user's name, email, or user ID.
 // Quota: QUOTA_PER_DAY requests per user per day (usage table, service role).
+// A request whose Gemini call fails (overloaded, rate limit, error) is refunded.
 // Every reply goes through check.ts; one retry with the problems listed.
 
 import { createClient } from "npm:@supabase/supabase-js@2.105.1";
@@ -159,7 +160,10 @@ Deno.serve(async (req) => {
       contents.push({ role: "model", parts: [{ text: g.text }] }, { role: "user", parts: [{ text: RETRY(problems) }] });
     }
   } catch (e) {
-    return fail(502, String((e as Error).message));
+    // No answer was shown, so this request does not count against the limit.
+    const { error: re } = await admin.rpc("refund_quota", { p_user: u.user.id });
+    if (re) console.error("refund_quota failed:", re.message);
+    return fail(502, String((e as Error).message), { refunded: !re });
   } finally {
     await admin.rpc("add_tokens", { p_user: u.user.id, p_in: tin, p_out: tout });
   }

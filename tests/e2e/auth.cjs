@@ -55,6 +55,7 @@ async function newPage(b) {
   ok(!(await p.isVisible('#resetForm')), 'reset form closed until asked for');
   ok(await p.getAttribute('#email', 'autocomplete') === 'username' && await p.getAttribute('#password', 'autocomplete') === 'current-password', 'autocomplete hints for password managers');
   ok(/^Sign in/.test(await p.title()), 'page title on sign-in');
+  ok(await p.locator('#signIn a[href="privacy.html"]').count() === 1, 'sign-in page links to the data page');
   await axeCheck(p, 'Sign in');
   await p.click('#signInBtn');
   ok(/Enter your email and password/.test(await p.textContent('#signInMsg')), 'empty form explains what is missing');
@@ -72,6 +73,7 @@ async function newPage(b) {
   ok(!(await p.isVisible('#changePw')), 'account menu closed at first');
   await p.click('#accountBtn');
   ok(await p.getAttribute('#accountBtn', 'aria-expanded') === 'true' && /Signed in as me@example.com/.test(await p.textContent('#accountMenu')), 'account menu shows who is signed in');
+  ok(await p.isVisible('#accountMenu a[href="privacy.html"]:has-text("Your data")'), 'account menu links to the data page');
   await p.keyboard.press('Escape');
   ok(!(await p.isVisible('#accountMenu')) && await p.evaluate(() => document.activeElement?.id) === 'accountBtn', 'Escape closes the menu and returns focus');
   await p.click('#accountBtn');
@@ -141,5 +143,10 @@ async function newPage(b) {
   await p.goto(BASE);
   await p.waitForSelector('#signIn:not([hidden])');
   ok(await p.evaluate(() => document.documentElement.scrollWidth) <= 375, 'no side scroll at 375');
+  await p.goto(BASE + 'privacy.html');
+  ok(/What goes to Google's AI/.test(await p.textContent('main')) && /Your data/.test(await p.title()), 'data page loads');
+  ok(await p.evaluate(() => document.documentElement.scrollWidth) <= 375, 'data page: no side scroll at 375');
+  await axeCheck(p, 'Data page');
+  ok(p.errs.length === 0, 'no page errors (data page)');
   await b.close();
 })().catch(e => { console.error('FAIL', e.message.split('\n').slice(0, 6).join('\n')); process.exit(1); });

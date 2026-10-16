@@ -189,10 +189,22 @@ language sql security definer set search_path = '' as $$
   where user_id = p_user and day = current_date;
 $$;
 
+-- Gives back one request when the AI call failed (no answer was shown).
+-- Uses the user's latest usage day, so a call that crosses midnight UTC
+-- refunds the day it was counted on. Never goes below 0.
+create or replace function public.refund_quota(p_user uuid) returns void
+language sql security definer set search_path = '' as $$
+  update public.usage set requests = requests - 1
+  where user_id = p_user and requests > 0
+    and day = (select max(day) from public.usage where user_id = p_user);
+$$;
+
 revoke all on function public.use_quota(uuid, int) from public, anon, authenticated;
 revoke all on function public.add_tokens(uuid, bigint, bigint) from public, anon, authenticated;
+revoke all on function public.refund_quota(uuid) from public, anon, authenticated;
 grant execute on function public.use_quota(uuid, int) to service_role;
 grant execute on function public.add_tokens(uuid, bigint, bigint) to service_role;
+grant execute on function public.refund_quota(uuid) to service_role;
 
 -- =====================================================================
 -- seed: tax year 2026 (coach-reference.md Section 2, plus federal brackets)

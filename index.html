@@ -20,6 +20,7 @@
     <div id="accountMenu" class="account-menu" hidden>
       <p id="who" class="who"></p>
       <button id="changePw" class="link" type="button">Change password</button>
+      <a id="privacyLink" class="link" href="privacy.html">Your data</a>
       <button id="signOut" class="link" type="button">Sign out</button>
     </div>
   </div>
@@ -37,7 +38,7 @@
 
   <section id="signIn" class="panel" hidden>
     <h1 tabindex="-1">Sign in</h1>
-    <p class="muted">Access is by invitation.</p>
+    <p class="muted">Access is by invitation. <a href="privacy.html">How the app uses your data</a></p>
     <form id="signInForm" novalidate>
       <label for="email">Email</label>
       <input id="email" name="email" type="email" autocomplete="username" required>
@@ -81,6 +82,7 @@
       </div>
     </form>
     <p id="setPwMsg" class="msg" role="status" aria-live="polite"></p>
+    <p class="muted"><a href="privacy.html">How the app uses your data</a></p>
   </section>
 
   <section id="home" class="panel" hidden>

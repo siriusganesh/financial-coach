@@ -101,7 +101,7 @@ export const STEPS = [
       { id: "q7", text: "Any pension, Social Security estimate (from ssa.gov/myaccount), or other income such as child support or rental? Give the amount and when it ends.",
         fields: [
           { key: "ss_annual", type: "money", scope: "earner", label: "Social Security estimate", unit: "/yr",
-            hint: "Blank = rough Section 3 placeholder" },
+            hint: "Blank = a rough estimate from your pay" },
           { key: "ss_start_age", type: "int", scope: "earner", label: "Social Security start age", min: 62, max: 70,
             hint: "Blank = 67 [DEFAULT]" },
           { key: "ss_covered", type: "radio", scope: "earner", label: "Does your job withhold Social Security tax?",
