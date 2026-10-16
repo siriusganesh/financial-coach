@@ -5,6 +5,7 @@
 
 import { fmtMoney } from "./form.js";
 import { renderTagged, legend } from "./tags.js";
+import { step9, step10, step11, step12, card } from "./plain-steps.js";
 
 let worker = null, seq = 0;
 const pending = new Map();
@@ -72,115 +73,14 @@ async function getResult(sb, st) {
   return out;
 }
 
-// ---------- step renderers ----------
-const B2_ACTION = { "8.00%+": "pay down with all savings after the match and starter cash",
-  "5.00-7.99%": "split extra savings 50/50 between extra payments and investing",
-  "0-4.99%": "minimum payments only; invest the rest" };
-
-function step9(o) {
-  const R = o.results, L = o.ledger, out = [];
-  out.push(sec("Self-test (reference Section 12)",
-    p(`Method: code. ${o.selftest.passed ? "Passed" : "FAILED"}. H ${fmtMoney(o.selftest.got.H)} (expected ${fmtMoney(o.selftest.expected.H)}), α_raw ${o.selftest.got.alpha_raw} (expected ${o.selftest.expected.alpha_raw}), γ ${o.selftest.got.gamma} (expected ${o.selftest.expected.gamma}).`)));
-  out.push(sec("B1. Employer match", table(["Earner", "Your contribution", "Needed for full match", "Result"],
-    L.earners.filter(e => R.B1[e.name]).map(e => [e.name, $m(e.employee_contrib), $m(e.match_required, "USER"), R.B1[e.name]]))));
-  out.push(sec("B2. Debt rule", R.B2.length
-    ? table(["Debt", "Rate used", "Row", "Action", "Promo payment needed"], R.B2.map(d =>
-      [d.name, pct(d.rate_used, 2, d.promo_payment_needed != null ? "USER, after promo" : "USER"), d.row, B2_ACTION[d.row],
-        d.promo_payment_needed != null ? `${fmtMoney(d.promo_payment_needed)}/mo [CALC]` : "n/a"]))
-    : p("No debts. PASS")));
-  out.push(sec("B3. Human capital type", table(["Earner", "Type", "Equity pay"],
-    Object.entries(R.types).map(([n, [t, e]]) => [n, t ?? "no income", `${e}% [CALC]`])),
-    p(`Household type: ${R.household_type} [RULE]. Same industry: ${R.same_industry ? "yes" : "no"}.`)));
-  const b = R.B4;
-  out.push(sec("B4. Liquidity buffer", p(`(${b.base_months} + ${b.dep_months}) = ${b.months} months [RULE] × essential ${$m(b.essential)} = target ${$m(b.target)}. Emergency cash ${$m(b.have, "USER")}. Earmarked ${$m(L.cash.earmarked, "USER")} (not counted). Gap ${$m(b.gap)}.`),
-    h("p", {}, badge(b.status), b.gap ? ` Months to fill: ${b.months_to_fill ?? "n/a"} [CALC]` : ""),
-    p(`Starter cash (D1 1b): target ${$m(R.starter.target)}, have ${$m(R.starter.have, "USER")}: ${R.starter.met ? "met" : "NOT met"}.`)));
-  out.push(sec("B5. Insurance", table(["Earner", "Life", "Life need", "Disability replaces", "Disability"],
-    Object.entries(R.B5).map(([n, v]) => [n, v.life, v.life_need ? $m(v.life_need) : "n/a (no dependents)", `${v.ltd_replacement_pct}% [CALC]`, v.ltd]))));
-  out.push(sec("B6. Concentration", table(["Check", "% of W", "Result"],
-    R.B6.map(([n, v, s]) => [n, v == null ? "n/a" : `${v}% [CALC]`, s]))));
-  const b7 = R.B7;
-  out.push(sec("B7. Roth IRA route", p(`MAGI ${$m(b7.magi)} vs. phase-out start ${$m(b7.phaseout_start, `LIMIT: ${o.limitsYear}`)}: ${b7.status}.`
-    + (b7.pro_rata_taxable_share_pct != null ? ` Pro-rata taxable share ${b7.pro_rata_taxable_share_pct}% [CALC].` : "")
-    + (b7.spousal_ira ? ` Spousal IRA ${b7.spousal_ira}.` : ""))));
-  if (R.flags?.length) out.push(sec("Flags", ...R.flags.map(f => p(f, "warn"))));
-  return out;
-}
-
-function step10(o) {
-  const R = o.results, a = R.alloc, k = R.risk, L = o.ledger;
-  const pts = L.earners.map(e => `${e.name}: R1 ${e.risk.R1} + R2 ${e.risk.R2} + R3 ${k.R3} + R4 ${e.risk.R4} = ${e.risk.R1 + e.risk.R2 + k.R3 + e.risk.R4}`);
-  const resv = new Map(R.W.reserves.map(([g, acct, amt]) => [acct, [g, amt]]));
-  const inW = new Set(["401k_trad", "401k_roth", "ira_trad", "ira_roth", "hsa", "taxable", "employer_stock", "403b", "457"]);
-  return [
-    sec("C1. Financial wealth (W)", table(["Account", "Balance", "In W", "Excluded (reason)"],
-      L.accounts.map(x => {
-        const r = resv.get(x.name);
-        if (!inW.has(x.kind)) return [x.name, $m(x.value, "USER"), "", `${x.kind}: not in W`];
-        return [x.name, $m(x.value, "USER"), $m(x.value - (r ? r[1] : 0)), r ? `${fmtMoney(r[1])} reserved for ${r[0]}` : ""];
-      })),
-      p(`W = ${$m(R.W.after_reserves)} (before goal reserves ${$m(R.W.before_reserves)}). Cash and unvested equity are excluded.`)),
-    sec("C2 to C5. Human capital and target",
-      p(`H ${$m(a.H)} (${Object.entries(a.H_by_earner).map(([n, v]) => `${n} ${fmtMoney(v)}`).join(", ")}) | H/W ${a.HW} [CALC]`),
-      p(`Risk: ${pts.join("; ")} → lower total ${k.points} → γ ${k.gamma} [RULE]`),
-      p(`α* ${a.alpha_star} | α_raw ${a.alpha_raw} | α_target ${a.alpha_target} [CALC]`),
-      p(a.HW >= 1
-        ? "Your future paychecks act like a large, steady asset, so the model puts your savings into more stocks; as savings grow and working years run out, the stock share falls."
-        : "Your savings are already large compared with your remaining paychecks, so the model's stock share is close to the no-paycheck baseline α*."),
-      p(`C6 liquidity adjustment: ${a.C6_applies ? "applies. Until the buffer is full, all new savings go to the buffer, and the taxable stock share does not go up." : "does not apply."}`)),
-    sec("C7. US vs. international (of the stock part)", table(["Option", "US / international", "Basis"], [
-      ["Global market weight", "about 60 / 40", "Approximate world market-cap weights; the user can check a current figure"],
-      ["Anarkulova et al.", "about 33 / 67", "[RESEARCH: Anarkulova 2023], 39 countries, 1890 to 2023"]])),
-    sec("C8. Glide path", table(["Age (You)", "W", "H", "α_raw", "α_target"],
-      R.glide.map(([age, w, hc, raw, tgt]) => [String(age), $m(w), $m(hc), String(raw), String(tgt)]))),
-    sec("C9. Comparison", table(["View", "Implication", "Key assumption"], [
-      ["This playbook (Choi et al. rule)", `α_target now ${a.alpha_target}, and the path above`, "Constant risk aversion, realistic labor income, no borrowing"],
-      ["Anarkulova et al. (2023)", "About 100% stocks at all ages, mostly international", "International diversification; results hold for risk aversion 0.5 to 10"],
-      ["Adams (2026)", "Lower stock share while working than standard models suggest", "Spending is slow to adjust; liquid savings are thin"],
-      ["Benzoni et al. (2007)", "Possibly lower stock share when young (hump shape)", "Labor income and stocks move together over long periods"],
-      ["Bodie, Merton & Samuelson (1992)", L.earners.some(e => e.works_after === "no") ? "An earner will not work again after retirement: the α_target path has less margin for error" : "Willing to work after losses supports more stock risk", "Ability to work more after losses supports more stock risk"],
-      ["Typical target-date fund", "Roughly 90% stocks when young, falling to about 40 to 50% at retirement", "Industry convention"]])),
-  ];
-}
-
-function step11(o) {
-  const R = o.results, r = R.retirement, pj = R.projection;
-  const out = [];
-  out.push(sec("D1. Order and timeline", R.timeline.length
-    ? table(["Step", "Amount", "Months at current take-home saving"], R.timeline.map(([s, amt, n]) => [s, $m(amt), n == null ? "n/a" : `${n} [CALC]`]))
-    : p("Steps 1b, 2, and 3 are complete. New saving follows steps 4 to 8: HSA, IRA, 401(k) to the limit, mega backdoor, taxable."),
-    p(`Investing now: ${$m(pj.invest_per_year)} per year (payroll, match, take-home investing, 50% of RSU/ESPP after tax).`)));
-  out.push(sec("D2. Roth vs. traditional", p(`${R.D2} [RULE], from the federal bracket in the assumptions list.`)));
-  out.push(sec("E1 to E4. Goals", R.goals.length
-    ? table(["Goal", "Target", "Years", "Stock %", "Reserve", "Need", "Reserve covers"], R.goals.map(g =>
-      [g.name, $m(g.amount), String(g.years), `${g.stock_pct}% [RULE]`, $m(g.reserve), `${fmtMoney(g.need_per_month)}/mo [CALC]`, `${g.funded_pct}% [CALC]`]))
-    : p("No goals other than retirement.")));
-  out.push(sec("E5 and E6. Retirement",
-    p(`Spending ${$m(r.spending, r.spending_source.startsWith("user") ? "USER" : "DEFAULT")}/yr (${r.spending_source}).${r.removed_costs.length ? " Removed: " + r.removed_costs.map(([n, v]) => `${n} ${fmtMoney(v)}/mo`).join(", ") + "." : ""}`),
-    p(`Social Security: ${Object.entries(r.ss_by_earner).map(([n, v]) => `${n} ${fmtMoney(v)}/yr`).join(", ")}.`),
-    table(["Withdrawal rate", "Steady need", "Gap years", "Total need"], Object.entries(r.need).map(([wr, [s, g, t]]) =>
-      [`${(Number(wr) * 100).toFixed(1)}% [DEFAULT]`, $m(s), $m(g), $m(t)])),
-    h("p", {}, `Projected at first retirement (You age ${pj.first_retirement_e1_age}): ${$m(r.projected)} = ${r.pct}% of need at 4% [CALC] → `, badge(r.status))));
-  if (o.monte_carlo) {
-    const [p10, p50, p90] = o.monte_carlo;
-    out.push(sec("E7. Monte Carlo", p(`P10 ${$m(p10)} / P50 ${$m(p50)} / P90 ${$m(p90)}. 5,000 paths, seed 1, ${o.mc_years} years, constant stock share α_target, not the glide path.`)));
-  }
-  out.push(sec("E8. Early retirement bridge", p(typeof R.E8 === "string" ? R.E8
-    : `${R.E8.years} years; need ${$m(R.E8.need)}; accessible ${$m(R.E8.accessible_projected)}; ${R.E8.shortfall ? `gap ${$m(R.E8.shortfall)}` : `surplus ${$m(R.E8.surplus)}`}.`)));
-  return out;
-}
-
-function step12(o) {
-  const lv = o.results.leverage, L = o.ledger;
-  if (L.leverage_interest === "none") return [p("Step 12: skipped (no interest in leverage).")];
-  const failed = Object.entries(lv.gate).filter(([, v]) => !v).map(([k]) => k);
-  const out = [sec("F1. Gate", table(["Condition", "Met"], Object.entries(lv.gate).map(([k, v]) => [k, v ? "yes" : "no"])),
-    p(lv.open ? "Gate open." : `Leverage is not suitable in this plan. Failed: ${failed.join("; ")}.`),
-    p(`E_growth ${lv.E_growth} [CALC]: above this exposure, more leverage lowers expected long-run growth at the default costs and volatility.`))];
-  if (lv.open) out.push(sec("F2. Exposure", p(lv.E > 1 ? `E ${lv.E}; sleeve in a 2× index fund ${$m(lv.sleeve)} [CALC]` : "E ≤ 1.0: leverage adds no expected growth at these assumptions.")));
-  if (lv.existing.length) out.push(sec("F0. Existing leverage", table(["Holding", "Multiple", "Expected growth"], lv.existing.map(([n, m, g]) => [n, `${m}×`, `${g}% [CALC]`]))));
-  return out;
-}
+// ---------- step renderers (plain language, js/plain-steps.js) ----------
+const INTRO = {
+  9: "Basic checks: employer match, debts, emergency fund, insurance, and concentration.",
+  10: "How much of your savings the model puts in stocks, and why.",
+  11: "Where your monthly saving goes, your goals, and retirement.",
+  12: "Whether borrowing to invest fits your plan.",
+  13: "Your summary, next steps, and questions.",
+};
 
 const AI_NOTICE = "This part uses Google's Gemini (free tier). It sends the calculator results, the assumptions, and your question. "
   + "It does not send your name or email. Google may use this text to improve its products, and people may review it. "
@@ -212,14 +112,14 @@ function step13(o, { sb, st }) {
   const narrative = h("div", { class: "ai" }, p("Loading…", "muted"));
   const thread = h("div", { class: "thread" });
   const ask = h("form", { class: "ask-form", novalidate: "" },
-    h("label", { for: "aiq", class: "flabel", text: "Ask a follow-up question about these results" }),
+    h("label", { for: "aiq", class: "flabel", text: "Ask a question about your results" }),
     h("textarea", { id: "aiq", rows: 3, maxlength: 1000 }),
     h("div", { class: "actions" }, h("span", { class: "muted small", id: "aiquota" }), h("button", { type: "submit", text: "Ask" })),
     h("p", { class: "msg", role: "status", "aria-live": "polite" }));
   const msg = ask.querySelector(".msg");
 
   const showNarrative = (text, check) => narrative.replaceChildren(replyBlock(text, check));
-  const writeBtn = h("button", { type: "button", text: "Write sections 9 and 10" });
+  const writeBtn = h("button", { type: "button", text: "Write next steps" });
   writeBtn.addEventListener("click", async () => {
     writeBtn.disabled = true;
     narrative.append(p("Writing… this can take up to a minute.", "muted"));
@@ -266,13 +166,14 @@ function step13(o, { sb, st }) {
   })();
 
   return [
-    p("DISCLAIMER: Educational model only. Not financial, tax, or legal advice."),
-    p(`Limits used: ${o.limitsYear} from ${o.limitsSource}${o.limitsYear < new Date().getFullYear() ? " (may be outdated: verify at irs.gov)" : ""}.`),
-    sec("Calculator report (plan())", h("pre", { class: "report", text: o.report })),
-    sec("8. Assumptions used", h("ul", { class: "facts" }, ...o.assumptions.map(a => h("li", { text: a })))),
-    sec("9 and 10. Next things to check, and what would change this plan", p(AI_NOTICE, "notice"), narrative),
-    sec("Follow-up questions", thread, ask),
-    p("Change any input and I will rerun the numbers.", "ask"),
+    p("This is education, not financial, tax, or legal advice."),
+    sec("Next steps and what could change the plan", p(AI_NOTICE, "notice"), narrative),
+    sec("Ask a question", thread, ask),
+    card("Assumptions the plan used", null, [h("ul", { class: "facts" }, ...o.assumptions.map(a => h("li", { text: a })))], []),
+    card("Full calculator report", null,
+      [`Tax limits are from ${o.limitsYear} (${o.limitsSource})${o.limitsYear < new Date().getFullYear() ? ". They may be out of date: check irs.gov" : ""}.`],
+      [h("pre", { class: "report", text: o.report })]),
+    p("Change any answer and the numbers run again.", "ask"),
   ];
 }
 
@@ -291,7 +192,7 @@ export async function renderAnalysis(sb, st, n, sessionId, page, save) {
       h("p", {}, h("a", { href: `#/s/${sessionId}/8`, text: "Go to the summary to change an answer" })));
     return;
   }
-  body.replaceChildren(legend(), ...RENDER[n](o, { sb, st }), p(`Calculator version ${o.calcVersion}, answers version ${st.version}.`, "muted small"));
+  body.replaceChildren(p(INTRO[n], "intro"), legend(), ...RENDER[n](o, { sb, st }), p(`Calculator version ${o.calcVersion}, answers version ${st.version}.`, "muted small"));
   if (n < 13) {
     const go = h("button", { type: "button", text: "Continue" });
     const back = h("a", { href: `#/s/${sessionId}/${n - 1}`, class: "btnlink", text: "Back" });

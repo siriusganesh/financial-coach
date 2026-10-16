@@ -141,10 +141,28 @@ class Mapping(unittest.TestCase):
         self.assertTrue(out["ok"], out.get("error"))
         self.assertTrue(out["selftest"]["passed"])
         self.assertIn("0.04", out["results"]["retirement"]["need"])
+        self.assertGreater(out["results"]["retirement"]["supported_spending"]["0.04"], 0)
         self.assertEqual(len(out["monte_carlo"]), 3)
         bad = json.loads(ledger.run(json.dumps({"hh": {"filing": "qss"}, "earners": []}),
                                     json.dumps(LIMITS), "2026-10-15"))
         self.assertFalse(bad["ok"])
+
+    def test_supported_spending(self):
+        L, _ = ledger.build_ledger(copy.deepcopy(TEST_ANSWERS), LIMITS, TODAY)
+        R, _ = c.plan(copy.deepcopy(L))
+        s = ledger.supported_spending(L, R, 0.04)
+        projected = R["projection"]["W_at_first_retirement"]
+
+        def need(spend):
+            L2 = copy.deepcopy(L)
+            L2["retirement"] = {"spending": spend, "includes_ending_costs": False}
+            return c.plan(L2)[0]["retirement"]["need"][0.04][2]
+        self.assertLessEqual(need(s), projected)          # s is covered
+        self.assertGreater(need(s + 101), projected)      # $101 more is not (search to $1, rounded down to $100)
+        self.assertGreater(s, 100000)                     # Section 12 case is on track at $100,000
+        self.assertEqual(s % 100, 0)
+        # lower withdrawal rate supports less spending
+        self.assertLess(ledger.supported_spending(L, R, 0.035), s)
 
     def test_schema_seed_matches_test_limits(self):
         """The 2026 seed in schema.sql must hold the same values this test uses."""

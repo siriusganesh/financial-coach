@@ -163,3 +163,12 @@ code.src-limit    { color: var(--src-limit);    background: var(--src-limit-bg);
 code.src-research { color: var(--src-research); background: var(--src-research-bg); }
 .legend { font-size: .82rem; color: var(--muted); margin: 0 0 8px; line-height: 2; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------- plain-language cards ---------- */
+.intro { color: var(--muted); margin: 0 0 6px; }
+.card h2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.card p { margin: 0 0 8px; }
+details.math { margin: 4px 0 8px; font-size: .88rem; }
+details.math > summary { cursor: pointer; color: var(--accent); font-weight: 500; padding: 4px 0; }
+details.math[open] > summary { margin-bottom: 6px; }
+details.math p { color: var(--muted); }

@@ -260,6 +260,32 @@ def selftest():
     return {"passed": ok, "got": got, "expected": SELFTEST_EXPECTED}
 
 
+def supported_spending(L, R, wr=0.04, step=100):
+    """Highest yearly retirement spending (today's dollars) whose total need at
+    withdrawal rate wr is covered by the projected savings at first retirement.
+    Uses plan() unchanged: binary search on retirement.spending. Need rises
+    with spending, so the search is valid. Rounded down to `step` dollars."""
+    projected = R["projection"]["W_at_first_retirement"]
+
+    def need(spend):
+        L2 = copy.deepcopy(L)
+        L2["retirement"] = {"spending": spend, "includes_ending_costs": False}
+        return c.plan(L2)[0]["retirement"]["need"][wr][2]
+
+    if need(0) > projected:
+        return 0
+    lo, hi = 0.0, max(2 * projected * wr, 100000.0)
+    while need(hi) <= projected:           # widen until the need exceeds savings
+        lo, hi = hi, hi * 2
+    while hi - lo > 1:                     # to the nearest dollar, then round down
+        mid = (lo + hi) / 2
+        if need(mid) <= projected:
+            lo = mid
+        else:
+            hi = mid
+    return int(lo // step * step)
+
+
 def _jsonable(o):
     if isinstance(o, dict):
         return {str(k): _jsonable(v) for k, v in o.items()}
@@ -281,6 +307,7 @@ def run(answers_json, limits_json, today_iso):
     except InputError as e:
         return json.dumps({"ok": False, "error": str(e), "selftest": st})
     R, report = c.plan(copy.deepcopy(L))
+    R["retirement"]["supported_spending"] = {wr: supported_spending(L, R, wr) for wr in (0.035, 0.04, 0.045)}
     years = R["projection"]["first_retirement_e1_age"] - L["earners"][0]["age"]
     mc = None
     if years > 0:
