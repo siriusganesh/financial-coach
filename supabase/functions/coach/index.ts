@@ -12,6 +12,8 @@ import { contextBlock, FOLLOWUP_TASK, NARRATIVE_SCHEMA, NARRATIVE_TASK, RETRY, S
 import { RESEARCH } from "./research.ts";
 
 const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.8-flash";
+// Used when MODEL is overloaded (HTTP 503/500) after the retries.
+const FALLBACK = Deno.env.get("GEMINI_FALLBACK_MODEL") ?? "gemini-3.6-flash";
 const QUOTA = Number(Deno.env.get("QUOTA_PER_DAY") ?? "50");
 const ORIGINS = ["https://siriusganesh.github.io", "http://localhost:8000"];
 
@@ -27,7 +29,24 @@ function cors(req: Request) {
 
 type Turn = { role: "user" | "model"; parts: { text: string }[] };
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Retries an overloaded model (503/500) twice, then tries FALLBACK once.
+// A 429 (free-tier limit) is not retried.
 async function gemini(contents: Turn[], schema?: unknown) {
+  const plan = [MODEL, MODEL, MODEL, FALLBACK];
+  let last: Error | null = null;
+  for (let i = 0; i < plan.length; i++) {
+    try { return { ...(await geminiOnce(plan[i], contents, schema)), model: plan[i] }; } catch (e) {
+      last = e as Error;
+      if (!(e as { overloaded?: boolean }).overloaded) throw e;
+      if (i < plan.length - 1) await sleep([1000, 3000, 0][i] ?? 0);
+    }
+  }
+  throw last!;
+}
+
+async function geminiOnce(model: string, contents: Turn[], schema?: unknown) {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) throw new Error("GEMINI_API_KEY is not set.");
   const body: Record<string, unknown> = {
@@ -35,13 +54,17 @@ async function gemini(contents: Turn[], schema?: unknown) {
     contents,
     generationConfig: { temperature: 0.2, ...(schema ? { responseMimeType: "application/json", responseSchema: schema } : {}) },
   };
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body),
   });
   const j = await r.json();
   if (!r.ok) {
     const msg = j?.error?.message ?? r.statusText;
-    throw new Error(r.status === 429 ? `Gemini free-tier limit reached. Try again later. (${msg})` : `Gemini error ${r.status}: ${msg}`);
+    const err = new Error(r.status === 429 ? `Gemini free-tier limit reached. Try again later. (${msg})`
+      : r.status === 503 || r.status === 500 ? `Gemini is overloaded right now (${model}). Try again in a few minutes.`
+      : `Gemini error ${r.status}: ${msg}`);
+    (err as Error & { overloaded?: boolean }).overloaded = r.status === 503 || r.status === 500;
+    throw err;
   }
   const text = (j.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("");
   return { text, tin: j.usageMetadata?.promptTokenCount ?? 0, tout: j.usageMetadata?.candidatesTokenCount ?? 0 };
@@ -112,11 +135,11 @@ Deno.serve(async (req) => {
 
   const first: Turn = { role: "user", parts: [{ text: `${contextBlock(ctx)}\n\n${kind === "narrative" ? NARRATIVE_TASK : FOLLOWUP_TASK(question)}` }] };
   const contents: Turn[] = [...history, first];
-  let tin = 0, tout = 0, text = "", problems: string[] = [];
+  let tin = 0, tout = 0, text = "", problems: string[] = [], used = MODEL;
   try {
     for (let attempt = 0; attempt < 2; attempt++) {
       const g = await gemini(contents, kind === "narrative" ? NARRATIVE_SCHEMA : undefined);
-      tin += g.tin; tout += g.tout;
+      tin += g.tin; tout += g.tout; used = g.model;
       if (kind === "narrative") {
         try {
           const o = JSON.parse(g.text);
@@ -145,5 +168,5 @@ Deno.serve(async (req) => {
   const { error: me } = await db.from("messages").insert(rows);
   if (me) return fail(500, me.message);
 
-  return new Response(JSON.stringify({ text, check: { ok: !problems.length, problems }, used_today: count, quota: QUOTA, model: MODEL }), { headers });
+  return new Response(JSON.stringify({ text, check: { ok: !problems.length, problems }, used_today: count, quota: QUOTA, model: used }), { headers });
 });
