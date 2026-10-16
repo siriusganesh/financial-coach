@@ -12,7 +12,7 @@ Education, not advice. The coach is not a licensed financial advisor, tax profes
 | `coach/coach_calculator.py` | Does all math. Runs unchanged in the browser in Pyodide (`js/calc-worker.js`). Deterministic. |
 | `coach/ledger.py` | Maps the interview answers to the `plan()` ledger and lists every assumption. |
 | Gemini (free tier), through the Supabase Edge Function `supabase/functions/coach` | Explains `plan()` results and answers follow-up questions. Never computes numbers. Gets no name, email, or user ID. |
-| Supabase | Auth (magic link, invite-only) and storage. Row-level security limits every row to its owner. |
+| Supabase | Auth (email and password, invite-only) and storage. Row-level security limits every row to its owner. |
 
 The Gemini API key lives only in Supabase Edge Function secrets. It is never in this repo or in the browser.
 
@@ -35,12 +35,13 @@ tests/rls/                   RLS tests (CI runs them against Postgres 16)
 
 1. Create a new Supabase project.
 2. SQL editor: paste and run `supabase/schema.sql`. It is safe to run again.
-3. Authentication > Sign In / Providers > Email: turn off **Allow new users to sign up**. Keep the email provider on.
+3. Authentication > Sign In / Providers > Email: turn off **Allow new users to sign up**. Keep the email provider on. Set the minimum password length to 12 (the app asks for 12).
 4. Authentication > URL Configuration:
    - Site URL: `https://siriusganesh.github.io/financial-coach/`
    - Redirect URLs: add the Site URL and `http://localhost:8000/**` for local testing.
 5. Project Settings > API: copy the project URL and the anon (public) key into `js/config.js`.
-6. To add a user: Authentication > Users > Invite user.
+6. To add a user: Authentication > Users > Invite user. The invite link opens "Set your password"; after that the person signs in with email and password. "Forgot your password?" sends a reset link to the same page.
+7. The built-in email service sends only 2 emails per hour per project. For more, set up custom SMTP (Authentication > Emails).
 
 ## AI explainer (Edge Function)
 

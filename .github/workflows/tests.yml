@@ -54,11 +54,12 @@ jobs:
         run: |
           npm install --no-save playwright@1 axe-core@4
           npx playwright install --with-deps chromium
-      - name: All 13 steps against mocked Supabase, with axe accessibility checks
+      - name: All 13 steps and sign-in flows against mocked Supabase, with axe accessibility checks
         run: |
           python3 -m http.server 8765 >/dev/null 2>&1 &
           sleep 1
           node tests/e2e/interview.cjs
+          node tests/e2e/auth.cjs
 
   edge-function:
     runs-on: ubuntu-latest
