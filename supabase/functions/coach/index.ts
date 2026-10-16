@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
   const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? "";
   const db = createClient(url, anon, { global: { headers: { authorization: auth } } });
   const { data: u, error: ue } = await db.auth.getUser(auth.replace(/^Bearer /i, ""));
-  if (ue || !u?.user) return fail(401, "Not signed in.");
+  if (ue || !u?.user) return fail(401, `Not signed in${ue ? `: ${ue.message}` : "."}`);
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   let body: { session_id?: string; kind?: string; question?: string };

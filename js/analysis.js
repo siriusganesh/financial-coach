@@ -186,7 +186,12 @@ const AI_NOTICE = "This part uses Google's Gemini (free tier). It sends the calc
   + "Do not type names, account numbers, or other details that identify you.";
 
 async function invokeCoach(sb, body) {
-  const { data, error } = await sb.functions.invoke("coach", { body });
+  // Send the user's access token explicitly, so the function never gets the
+  // public anon key in its place.
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw new Error("Your sign-in expired. Sign in again.");
+  const { data, error } = await sb.functions.invoke("coach", {
+    body, headers: { Authorization: `Bearer ${session.access_token}` } });
   if (!error) return data;
   let msg = error.message;
   try { msg = (await error.context.json()).error || msg; } catch { /* keep message */ }
