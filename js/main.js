@@ -1,7 +1,9 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
+import { showInterview } from "./interview.js";
 
 const $ = (id) => document.getElementById(id);
-const views = ["loading", "setup", "signIn", "home"];
+const views = ["loading", "setup", "signIn", "home", "interview"];
+let currentUser = null;
 let sb = null;
 
 function show(view) {
@@ -59,7 +61,10 @@ async function loadSessions() {
   }
   for (const s of data) {
     const li = document.createElement("li");
-    li.textContent = `${s.title || "Session"} · Step ${s.step} of 13 · ${s.status} · updated ${fmtDate(s.updated_at)}`;
+    const a = document.createElement("a");
+    a.href = `#/s/${s.id}`;
+    a.textContent = s.title || "Session";
+    li.append(a, ` · Step ${s.step} of 13 · ${s.status} · updated ${fmtDate(s.updated_at)}`);
     list.append(li);
   }
 }
@@ -67,19 +72,33 @@ async function loadSessions() {
 async function newSession() {
   $("newSession").disabled = true;
   const title = `Session ${new Date().toLocaleDateString()}`;
-  const { error } = await sb.from("sessions").insert({ title });
+  const { data, error } = await sb.from("sessions").insert({ title }).select("id").single();
   $("newSession").disabled = false;
   if (error) { $("homeMsg").textContent = `Could not start a session: ${error.message}`; return; }
   $("homeMsg").textContent = "";
+  location.hash = `#/s/${data.id}/1`;
+}
+
+// Routes: "" or "#" = session list; "#/s/<id>[/<step>]" = interview.
+async function route() {
+  if (!currentUser) { show("signIn"); return; }
+  const m = location.hash.match(/^#\/s\/([0-9a-f-]{36})(?:\/(\d+))?$/);
+  if (m) {
+    show("interview");
+    await showInterview(sb, $("interview"), m[1], m[2], (h) => { location.hash = h; });
+    return;
+  }
+  show("home");
   await loadSessions();
 }
 
 async function onSession(session) {
   const user = session?.user ?? null;
+  const changed = user?.id !== currentUser?.id;
+  currentUser = user;
   setUser(user);
   if (!user) { show("signIn"); return; }
-  show("home");
-  await loadSessions();
+  if (changed) await route();
 }
 
 function init() {
@@ -91,6 +110,7 @@ function init() {
   $("signInForm").addEventListener("submit", sendLink);
   $("signOut").addEventListener("click", () => sb.auth.signOut());
   $("newSession").addEventListener("click", newSession);
+  window.addEventListener("hashchange", route);
   // INITIAL_SESSION fires once on load (also after the magic-link redirect),
   // then SIGNED_IN / SIGNED_OUT on changes. Defer the async work so the
   // callback returns at once (supabase-js holds a lock while it runs).
