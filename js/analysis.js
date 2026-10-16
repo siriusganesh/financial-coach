@@ -95,7 +95,10 @@ async function invokeCoach(sb, body) {
     body, headers: { Authorization: `Bearer ${session.access_token}` } });
   if (!error) return data;
   let msg = error.message;
-  try { msg = (await error.context.json()).error || msg; } catch { /* keep message */ }
+  try {
+    const j = await error.context.json();
+    msg = (j.error || msg) + (j.refunded ? " This try did not count toward your daily limit." : "");
+  } catch { /* keep message */ }
   throw new Error(msg);
 }
 
@@ -167,7 +170,8 @@ function step13(o, { sb, st }) {
 
   return [
     p("This is education, not financial, tax, or legal advice."),
-    sec("Next steps and what could change the plan", p(AI_NOTICE, "notice"), narrative),
+    sec("Next steps and what could change the plan", h("p", { class: "notice" }, AI_NOTICE + " ",
+      h("a", { href: "privacy.html", target: "_blank", rel: "noopener", text: "More about your data (opens in a new tab)" })), narrative),
     sec("Ask a question", thread, ask),
     card("Assumptions the plan used", null, [h("ul", { class: "facts" }, ...o.assumptions.map(a => h("li", { text: a })))], []),
     card("Full calculator report", null,

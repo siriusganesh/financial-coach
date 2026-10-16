@@ -46,23 +46,39 @@ async function save(sb, st, A, nextStep, extra = {}) {
   Object.assign(st.session, patch);
 }
 
-// ---------- step 5: cash-flow table ----------
+// ---------- step 5: cash-flow check ----------
+// Plain sentences first; the line-by-line table is under "Show the math".
 function cashTable(cc) {
+  const money = (v, tag) => `${v < 0 ? "−" : ""}${fmtMoney(Math.abs(v))} [${tag}]`;
+  const pay = cc.basis === "before" ? "pay before payroll deductions" : "take-home pay";
+  const plain = [`Your ${pay} is ${money(cc.takeHome, "USER")} a month.`,
+    `You spend ${money(cc.B, "CALC")} and save ${money(cc.C, "CALC")} a month.`
+      + (cc.payLines.length ? ` Payroll deductions take ${money(cc.D, "CALC")}.` : "")];
+  const pct = `${Math.abs(cc.pct)}% [CALC]`;
+  if (Math.abs(cc.gap) < 1) plain.push("Every dollar has a place. Your budget adds up.");
+  else if (cc.gap > 0) plain.push(`That leaves ${money(cc.gap, "CALC")} a month (${pct} of your ${pay}) that your budget does not show.`);
+  else plain.push(`Your budget is ${money(-cc.gap, "CALC")} a month (${pct} of your ${pay}) more than you have.`);
+  if (!cc.flag && Math.abs(cc.gap) >= 1) plain.push("This is within 5% [RULE], so the plan can use your numbers as they are.");
+
   const row = (label, v, cls) => h("tr", { class: cls }, h("td", { text: label }), h("td", { class: "num", text: v }));
   const t = h("table", { class: "cash" });
-  t.append(row(`Take-home (Q12, ${cc.basis} deductions)`, fmtMoney(cc.takeHome) + " [USER]", "strong"));
-  for (const [n, v] of cc.spendLines) t.append(row(`  − spending: ${n}`, fmtMoney(v) + " [USER]"));
-  t.append(row("− Spending total", fmtMoney(cc.B) + " [CALC]", "strong"));
-  for (const [n, v] of cc.saveLines) t.append(row(`  − saving: ${n}`, fmtMoney(v) + " [USER]"));
-  t.append(row("− Saving total", fmtMoney(cc.C) + " [CALC]", "strong"));
+  t.append(row(cc.basis === "before" ? "Pay before payroll deductions" : "Take-home pay", money(cc.takeHome, "USER"), "strong"));
+  for (const [n, v] of cc.spendLines) t.append(row(`  Spending: ${n}`, `−${money(v, "USER")}`));
+  t.append(row("Total spending", `−${money(cc.B, "CALC")}`, "strong"));
+  for (const [n, v] of cc.saveLines) t.append(row(`  Saving: ${n}`, `−${money(v, "USER")}`));
+  t.append(row("Total saving", `−${money(cc.C, "CALC")}`, "strong"));
   if (cc.payLines.length) {
-    for (const [n, v] of cc.payLines) t.append(row(`  − payroll: ${n}`, fmtMoney(v) + " [USER]"));
-    t.append(row("− Payroll total", fmtMoney(cc.D) + " [CALC]", "strong"));
+    for (const [n, v] of cc.payLines) t.append(row(`  Payroll: ${n}`, `−${money(v, "USER")}`));
+    t.append(row("Total payroll deductions", `−${money(cc.D, "CALC")}`, "strong"));
   }
-  t.append(row("= Gap", `${cc.gap < 0 ? "−" : ""}${fmtMoney(Math.abs(cc.gap))} [CALC] (${cc.pct}% [CALC] of take-home)`, "total"));
-  const box = h("section", { class: "q cashcheck" }, h("h2", { text: "Cash-flow check (reference Section 4)" }),
-    h("p", { class: "muted", text: "Each dollar is in one line only. Yearly costs and employer match are not in this monthly check." }), t);
-  if (cc.flag) box.append(h("p", { class: "warn", text: `The gap is more than 5% of take-home. Go back to Step 4 to fix a line, or answer below.` }));
+  t.append(row(cc.gap < 0 ? "Over budget" : "Not in your budget", `${money(Math.abs(cc.gap), "CALC")} (${pct})`, "total"));
+
+  const box = h("section", { class: "q card cashcheck" }, h("h2", { text: "Does your monthly budget add up?" }),
+    ...plain.map(x => h("p", { text: x })));
+  if (cc.flag) box.append(h("p", { class: "warn", text: `The difference is more than 5% [RULE] of your ${pay}. Fix a line in Step 4, or answer the question below.` }));
+  box.append(h("details", { class: "math" }, h("summary", { text: "Show the math" }),
+    h("p", { text: "Each dollar is in one line only. Yearly costs and the employer match are not part of this monthly check." }),
+    h("div", { class: "tablewrap" }, t)));
   return box;
 }
 
@@ -78,6 +94,14 @@ function fmtVal(f, v, A) {
   return String(v);
 }
 
+// One answer line: "Label: value". The value is plain text in bold (it is
+// all your input, so it needs no color chip). Blanks are muted.
+function fact([label, value, empty]) {
+  const li = h("li", {}, `${label.replace(/\?$/, "")}: `);
+  li.append(value != null ? h("strong", {}, value) : h("span", { class: "muted", text: empty }));
+  return li;
+}
+
 function summary(A, sid) {
   const box = h("div", { class: "questions" });
   const defaults = [];
@@ -86,40 +110,47 @@ function summary(A, sid) {
     const sec = h("section", { class: "q", "data-chapter": step.n }, h("h2", { text: `Step ${step.n}: ${chapterName(step.n)}` }));
     for (const q of step.questions) {
       if (q.id === "gap" && !A.hh.gap_note) continue;
-      const lines = [];
+      const lines = [], blanks = [];
       const scopes = [["hh", A.hh, null], ...Array.from({ length: n }, (_, i) => [`e${i}`, A.earners[i] || {}, earnerName(i)])];
       for (const [sc, store, who] of scopes) {
         for (const f of q.fields.filter(f => (f.scope === "hh") === (sc === "hh"))) {
           if (f.show && !(sc === "hh" ? f.show(A) : f.show(A, Number(sc.slice(1))))) continue;
           const v = store[f.key];
-          const prefix = who ? `${who}: ` : "";
+          const prefix = who ? `${who} · ` : "";
           if (f.type === "list") {
-            if (!v?.length) { lines.push(`${prefix}${f.label}: none`); continue; }
+            if (!v?.length) { lines.push([`${prefix}${f.label}`, null, "None"]); continue; }
             for (const row of v) {
-              const parts = f.cols.filter(c => row[c.key] != null).map(c => `${c.label} ${fmtVal(c, row[c.key], A)}`);
-              lines.push(`${prefix}${f.label}: ${parts.join(", ")}`);
-              if (f.key === "goals" && row.priority == null) defaults.push(`Goal "${row.name || "unnamed"}": priority 2 [DEFAULT]`);
+              const [first, ...rest] = f.cols;
+              const named = first.type === "text" && row[first.key];
+              const parts = (named ? rest : f.cols).filter(c => row[c.key] != null && row[c.key] !== "")
+                .map(c => c.label === "Amount" ? fmtVal(c, row[c.key], A) : `${c.label}: ${fmtVal(c, row[c.key], A)}`);
+              lines.push([`${prefix}${f.label}`, [named ? row[first.key] : null, parts.join(", ")].filter(Boolean).join(": ")]);
+              if (f.key === "goals" && row.priority == null) defaults.push([`Goal "${row.name || "unnamed"}": priority`, "2"]);
             }
             continue;
           }
           const s = fmtVal(f, v, A);
           if (s == null) {
-            if (f.hint?.includes("[DEFAULT]") || f.hint?.startsWith("Blank =")) defaults.push(`${prefix}${f.label}: ${f.hint.replace(/^Blank = /, "")}`);
-            lines.push(`${prefix}${f.label}: not given`);
-          } else lines.push(`${prefix}${f.label}: ${s} [USER]`);
+            if (f.hint?.includes("[DEFAULT]") || f.hint?.startsWith("Blank =")) defaults.push([`${prefix}${f.label}`, f.hint.replace(/^Blank = /, "").replace(/\s*\[DEFAULT\]\s*/g, " ").trim()]);
+            blanks.push(`${prefix}${f.label}`);
+          } else lines.push([`${prefix}${f.label}`, s]);
         }
       }
       const qn = q.id.startsWith("q") ? `${q.id.slice(1)}. ` : "";
       sec.append(h("div", { class: "qhead" }, h("h3", { text: qn + q.text }),
         h("a", { href: stepHref(sid, step.n, { q: q.id, ret: 8 }), class: "change", "aria-label": `Change: ${QUESTIONS[q.id]?.[1] ?? q.id}`, text: "Change" })),
-        h("ul", { class: "facts" }, ...lines.map(l => h("li", { text: l }))));
+        h("ul", { class: "facts" }, ...lines.map(fact),
+          blanks.length ? h("li", { class: "muted" }, `Left blank: ${blanks.join(", ")}`) : null));
     }
     box.append(sec);
   }
-  const dsec = h("section", { class: "q" }, h("h2", { text: "Defaults that will be used" }));
-  dsec.append(defaults.length ? h("ul", { class: "facts" }, ...defaults.map(d => h("li", { text: d })))
-    : h("p", { text: "None." }));
-  box.prepend(dsec);
+  // Blanks first: they are the answers most likely to need a second look.
+  const dsec = h("section", { class: "q", "data-label": "Blanks the plan fills in" }, h("h2", { text: "Blanks the plan fills in" }));
+  dsec.append(defaults.length
+    ? h("p", { text: "You left these blank, so the plan uses a standard value. To use your own, click Change next to the question below." })
+    : h("p", { text: "None. You answered every question that has a standard value." }));
+  if (defaults.length) dsec.append(h("ul", { class: "facts" }, ...defaults.map(fact)));
+  box.prepend(h("p", { text: "Check your answers. To fix one, click Change next to its question. When all is right, click This is correct at the bottom." }), dsec);
   return box;
 }
 
@@ -186,7 +217,7 @@ export async function showInterview(sb, root, sessionId, stepParam, nav, opts = 
 
   let ctx = {};
   let body;
-  if (step.cashCheck || step.summary) page.append(legend());
+  if (step.cashCheck) page.append(legend());
   if (step.cashCheck) {
     const cc = cashCheck(st.A);
     ctx = { gapFlag: cc.flag };

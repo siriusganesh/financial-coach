@@ -17,6 +17,7 @@ function mock(page) {
     const json = (status, body) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (url.pathname === '/functions/v1/coach') {
       const b = JSON.parse(req.postData()); db.coachCalls.push(b);
+      if (/FAIL/.test(b.question || '')) return json(502, { error: 'Gemini is overloaded right now. Try again in a few minutes.', refunded: true });
       const text = b.kind === 'narrative' ? '9. NEXT 3 THINGS TO CHECK OR DECIDE\n1. By 2026-11-15: fill the buffer [CALC]' : 'Answer to: ' + b.question;
       if (b.kind === 'followup') db.messages.push({ role: 'user', content: b.question });
       db.messages.push({ role: 'model', content: (b.kind === 'narrative' ? '[narrative]\n' : '') + text });
@@ -146,9 +147,12 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
   await axeCheck(p, 'Step 4 with list rows');
   await p.click('text=Save and continue');
   await p.waitForSelector('h1:has-text("Step 5 of 13")');
-  const txt = await p.textContent('table.cash');
-  ok(/Gap.*\$4,200/.test(txt) && /42%.*of take-home/.test(txt) && !/\[CALC\]/.test(txt), 'cash check: 10000-3800-2000 = 4200 gap, 42%');
-  ok(await p.isVisible('text=more than 5% of take-home'), 'gap warning shown');
+  const cc = await p.textContent('section.cashcheck');
+  ok(/take-home pay is \$10,000.*a month/.test(cc) && /leaves \$4,200.*a month \(42%.*of your take-home pay\)/.test(cc) && !/\[CALC\]|Q12|Section 4/.test(cc), 'cash check in plain words: 10000-3800-2000 = 4200 left, 42%');
+  ok(!(await p.isVisible('table.cash')), 'line-by-line table is under Show the math');
+  await p.click('section.cashcheck summary');
+  ok(/Not in your budget.*\$4,200/.test(await p.textContent('table.cash')) && await p.isVisible('table.cash'), 'Show the math opens the table');
+  ok(/more than 5%.*of your take-home pay/.test(await p.textContent('section.cashcheck .warn')), 'gap warning shown');
   ok(await Q('gap').isVisible(), 'gap question shown when flagged');
   await axeCheck(p, 'Step 5');
   ok(/You: retirement age 55.*Partner: retirement age 65 \(default\)/.test(await Q('q17').textContent()), 'Q17 shows recorded ages, not asked again');
@@ -193,13 +197,17 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
   await p.click('text=Save and continue');
   await p.waitForSelector('h1:has-text("Step 8 of 13: Review your answers")');
   const sum = await p.textContent('#interview');
-  ok(/Partner: Age: 32 \(your input\)/.test(sum), 'summary per person');
-  ok(/Partner: Retirement age: 65 \(default\)/.test(sum), 'defaults listed');
-  ok(/Goal "Condo": priority 2 \(default\)/.test(sum), 'goal priority default listed');
+  ok(/Partner · Age: 32/.test(sum) && !/\(your input\)|\[USER\]/.test(sum), 'summary per person, values without chips');
+  ok(/Blanks the plan fills in/.test(sum) && /Partner · Retirement age: 65/.test(sum), 'blanks listed first, in plain words');
+  ok(/Check your answers\./.test(sum) && await p.locator('#interview ul.facts li strong').count() > 10, 'intro and bold answer values');
+  ok(!/Line [A-Z]|E or D E\b|not given/.test(sum), 'list rows read as names and values');
+  ok(/Left blank: /.test(sum) && !/Not answered|Section 3/.test(sum), 'blanks grouped in one line per question, no playbook section names');
+  ok(await p.locator('#interview ul.facts code.num').count() === 0 && !/\?:/.test(sum), 'no chips in the answer lists; no "?:"');
+  ok(/Goal "Condo": priority: 2/.test(sum), 'goal priority default listed');
   ok(/Is this correct\? What should I change\?/.test(sum), 'runner step 8 question');
   ok(await p.locator('#interview a.change').count() >= 20, 'review page has a Change link per question');
   await axeCheck(p, 'Step 8 review');
-  await p.click('text=This is correct');
+  await p.click('button:has-text("This is correct")');
   await p.waitForSelector('h1:has-text("Step 9 of 13: Basic checks")');
   ok(db.sessions[0].status === 'analysis' && db.sessions[0].step === 9, 'session moves to analysis, step 9');
   ok(db.ledgers.every((l, i) => l.version === i + 1), 'append-only, sequential answer versions');
@@ -263,7 +271,7 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
   ok(!/\[(CALC|USER|DEFAULT|RULE)\]/.test(s13), 'no raw source tags on step 13');
   ok(db.sessions[0].status === 'done' && db.sessions[0].step === 13, 'session done at step 13');
   ok(db.plan_results.length === 2, 'one plan_results row per answers version');
-  ok(/does not send your name or email/.test(s13), 'AI privacy notice shown');
+  ok(/does not send your name or email/.test(s13) && await p.locator('#interview .notice a[href="privacy.html"][target="_blank"]').count() === 1, 'AI privacy notice shown, with a link to the data page');
   await p.click('button:has-text("Write next steps")');
   await p.waitForSelector('text=By 2026-11-15');
   ok(await p.locator('.ai-text code.num.src-calc').count() === 1, 'AI reply numbers shown as colored chips');
@@ -276,6 +284,11 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
   await p.waitForSelector('text=Answer to: Why is my buffer 15 months?');
   ok(await p.isVisible('text=The reply check found problems'), 'failed reply check is shown as a warning');
   ok(/AI requests today: 2 of 50/.test(await p.textContent('#aiquota')), 'quota count shown');
+  await p.fill('#aiq', 'FAIL please');
+  await p.click('.ask-form button[type=submit]');
+  await p.waitForFunction(() => /did not count toward your daily limit/.test(document.querySelector('.ask-form .msg').textContent));
+  ok(/overloaded/.test(await p.textContent('.ask-form .msg')), 'failed AI call: error shown, and says the try was not counted');
+  for (let i = errs.length - 1; i >= 0; i--) if (/502/.test(errs[i])) errs.splice(i, 1);   // the expected 502
   await p.reload(); await p.waitForSelector('text=Answer to: Why is my buffer 15 months?', { timeout: 60000 });
   ok(await p.isVisible('text=By 2026-11-15') && await p.isVisible('button:has-text("Write again")'), 'saved AI turns reload');
   await p.goto(BASE + '#'); await p.waitForSelector('#sessions a');

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>Your data · Financial Coach</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="./">Financial Coach</a>
+</header>
+<main id="app">
+  <article class="panel prose">
+    <h1>Your data</h1>
+    <p>This page tells you what Financial Coach keeps, who can see it, and what goes to Google's AI. Read it before you enter your numbers.</p>
+
+    <h2>What the app keeps</h2>
+    <ul>
+      <li>Your email address and password. The password is stored only in scrambled (hashed) form, so nobody can read it.</li>
+      <li>Your answers to the questions. Each time you save, the app keeps a new copy, so earlier versions stay.</li>
+      <li>The calculator results for each session.</li>
+      <li>In Step 13: the questions you ask and the AI's replies.</li>
+      <li>How many AI requests you made each day, to apply the daily limit.</li>
+    </ul>
+    <p>The data is stored in a database at Supabase. The calculator runs in your own browser, so your numbers are not sent anywhere to do the math.</p>
+
+    <h2>Who can see it</h2>
+    <ul>
+      <li>You. The database lets each signed-in person read only their own rows.</li>
+      <li>The person who runs this app (the one who invited you) manages the database and can see the data as its administrator.</li>
+      <li>Supabase hosts the database. Resend sends the invitation and password emails, so it gets your email address.</li>
+    </ul>
+    <p>The app has no ads, no tracking, and no analytics. Your browser keeps a sign-in token so that you stay signed in. Signing out removes it.</p>
+
+    <h2>What goes to Google's AI</h2>
+    <p>Only Step 13 uses AI (Google Gemini, free tier). When you click "Write next steps" or ask a question, the app sends Google:</p>
+    <ul>
+      <li>the calculator results and the assumptions the plan used, and</li>
+      <li>the question you typed.</li>
+    </ul>
+    <p>It does not send your name, email, or account ID. On the free tier, Google may use this text to improve its products, and people at Google may read it. So do not type names, account numbers, employers, or other details that identify you in your questions. Steps 1 to 12 do not use AI.</p>
+
+    <h2>Deleting your data</h2>
+    <p>To delete your account and all of your data, ask the person who invited you. Deleting the account also deletes every session, answer, result, and message linked to it.</p>
+
+    <h2>What this app is not</h2>
+    <p>Financial Coach gives education, not advice. It is not a licensed financial advisor, tax professional, or attorney.</p>
+
+    <p><a href="./">Back to Financial Coach</a></p>
+  </article>
+</main>
+</body>
+</html>

@@ -70,6 +70,7 @@ end $$;
 reset role;
 set role authenticated;
 select pg_temp.must_fail('select public.use_quota(''00000000-0000-0000-0000-00000000000a'', 50)');
+select pg_temp.must_fail('select public.refund_quota(''00000000-0000-0000-0000-00000000000a'')');
 reset role;
 set role service_role;
 do $$ declare n int; begin
@@ -79,6 +80,11 @@ do $$ declare n int; begin
   perform public.add_tokens('00000000-0000-0000-0000-00000000000a', 100, 20);
   assert (select requests from public.usage where user_id = '00000000-0000-0000-0000-00000000000a') = 2, 'no increment past limit';
   assert (select tokens_out from public.usage where user_id = '00000000-0000-0000-0000-00000000000a') = 20, 'tokens added';
+  perform public.refund_quota('00000000-0000-0000-0000-00000000000a');
+  assert (select requests from public.usage where user_id = '00000000-0000-0000-0000-00000000000a') = 1, 'refund gives one back';
+  perform public.refund_quota('00000000-0000-0000-0000-00000000000a');
+  perform public.refund_quota('00000000-0000-0000-0000-00000000000a');
+  assert (select requests from public.usage where user_id = '00000000-0000-0000-0000-00000000000a') = 0, 'refund stops at 0';
 end $$;
 reset role;
 
