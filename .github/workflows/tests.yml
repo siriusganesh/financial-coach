@@ -54,8 +54,20 @@ jobs:
         run: |
           npm install --no-save playwright@1
           npx playwright install --with-deps chromium
-      - name: Interview Steps 1-8 against mocked Supabase
+      - name: All 13 steps against mocked Supabase
         run: |
           python3 -m http.server 8765 >/dev/null 2>&1 &
           sleep 1
           node tests/e2e/interview.cjs
+
+  edge-function:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check and test the coach Edge Function
+        run: |
+          deno check supabase/functions/coach/index.ts
+          deno test supabase/functions/coach/check_test.ts

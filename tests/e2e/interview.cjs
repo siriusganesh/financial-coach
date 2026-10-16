@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 // The real js/config.js is replaced by a fake one through page.route.
 const BASE = process.env.BASE_URL || 'http://localhost:8765/';
 const fs = require('fs'), path = require('path');
-const db = { sessions: [], ledgers: [], plan_results: [] };
+const db = { sessions: [], ledgers: [], plan_results: [], messages: [], coachCalls: [] };
 // tax_limits row from the seed in supabase/schema.sql
 const sql = fs.readFileSync(path.join(__dirname, '../../supabase/schema.sql'), 'utf8');
 const LIMITS = { year: 2026, source: 'seed', data: JSON.parse(sql.split('insert into public.tax_limits')[1].split("'")[1]) };
@@ -15,6 +15,13 @@ function mock(page) {
     const one = (req.headers()['accept'] || '').includes('vnd.pgrst.object');
     const eq = (k) => (url.searchParams.get(k) || '').replace(/^eq\./, '');
     const json = (status, body) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    if (url.pathname === '/functions/v1/coach') {
+      const b = JSON.parse(req.postData()); db.coachCalls.push(b);
+      const text = b.kind === 'narrative' ? '9. NEXT 3 THINGS TO CHECK OR DECIDE\n1. By 2026-11-15: fill the buffer [CALC]' : 'Answer to: ' + b.question;
+      if (b.kind === 'followup') db.messages.push({ role: 'user', content: b.question });
+      db.messages.push({ role: 'model', content: (b.kind === 'narrative' ? '[narrative]\n' : '') + text });
+      return json(200, { text, check: { ok: b.kind === 'narrative', problems: b.kind === 'narrative' ? [] : ['Number not in the results: $1'] }, used_today: db.coachCalls.length, quota: 50 });
+    }
     if (!url.pathname.startsWith('/rest/')) return json(200, {});
     if (tbl === 'sessions') {
       if (m === 'POST') { const row = { id: crypto.randomUUID(), step: 1, status: 'interview', updated_at: new Date().toISOString(), ...JSON.parse(req.postData()) }; db.sessions.push(row); return json(201, one ? row : [row]); }
@@ -28,6 +35,7 @@ function mock(page) {
       return json(200, rows);
     }
     if (tbl === 'tax_limits') return json(200, [LIMITS]);
+    if (tbl === 'messages') return json(200, db.messages);
     if (tbl === 'plan_results') {
       if (m === 'POST') { db.plan_results.push(JSON.parse(req.postData())); return r.fulfill({ status: 201, body: '' }); }
       return json(200, db.plan_results.filter(x => x.session_id === eq('session_id') && String(x.ledger_version) === eq('ledger_version')));
@@ -175,6 +183,17 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
   ok(/SNAPSHOT/.test(s13) && /Federal bracket/.test(s13), 'final output has report and assumptions');
   ok(db.sessions[0].status === 'done' && db.sessions[0].step === 13, 'session done at step 13');
   ok(db.plan_results.length === 1, 'same ledger and calculator version: no duplicate plan_results');
+  ok(/does not send your name or email/.test(s13), 'AI privacy notice shown');
+  await p.click('button:has-text("Write sections 9 and 10")');
+  await p.waitForSelector('text=By 2026-11-15');
+  ok(db.coachCalls[0].kind === 'narrative' && db.coachCalls[0].session_id === db.sessions[0].id && Object.keys(db.coachCalls[0]).length === 2, 'narrative call sends only session_id and kind');
+  await p.fill('#aiq', 'Why is my buffer 15 months?');
+  await p.click('button:has-text("Ask")');
+  await p.waitForSelector('text=Answer to: Why is my buffer 15 months?');
+  ok(await p.isVisible('text=The reply check found problems'), 'failed reply check is shown as a warning');
+  ok(/AI requests today: 2 of 50/.test(await p.textContent('#aiquota')), 'quota count shown');
+  await p.reload(); await p.waitForSelector('text=Answer to: Why is my buffer 15 months?', { timeout: 60000 });
+  ok(await p.isVisible('text=By 2026-11-15') && await p.isVisible('button:has-text("Write again")'), 'saved AI turns reload');
   await p.goto(BASE + '#'); await p.waitForSelector('#sessions a');
   ok(/Step 13 of 13 · done/.test(await p.textContent('#sessions')), 'session list shows progress');
   ok(errs.length === 0, 'no console errors: ' + JSON.stringify(errs));

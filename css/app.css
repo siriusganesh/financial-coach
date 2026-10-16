@@ -125,3 +125,8 @@ table.data td { border-bottom: 1px solid var(--border); padding: 4px 8px 4px 0; 
 @media (prefers-color-scheme: dark) { .badge.pass { color: #6fd39a; border-color: #6fd39a; } .badge.flag { color: #f0a070; border-color: #f0a070; } }
 pre.report { white-space: pre-wrap; word-break: break-word; font-size: .8rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
 .small { font-size: .8rem; }
+.notice { font-size: .85rem; color: var(--muted); border-left: 3px solid var(--border); padding-left: 10px; }
+.ai-reply { border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin: 8px 0; }
+.ai-text { white-space: pre-wrap; font-size: .92rem; }
+.q-user { font-weight: 600; margin: 12px 0 4px; }
+.ask-form textarea { width: 100%; padding: 8px 10px; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
