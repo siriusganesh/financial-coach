@@ -5,6 +5,7 @@
 import { STEPS, earnerCount, earnerName } from "./questions.js";
 import { renderQuestions, collect, applyVisibility, fmtMoney } from "./form.js";
 import { cashCheck } from "./cashflow.js";
+import { renderAnalysis, ANALYSIS_TITLES } from "./analysis.js";
 
 const SCHEMA = 1;
 const blankAnswers = () => ({ hh: {}, earners: [{}] });
@@ -128,18 +129,31 @@ export async function showInterview(sb, root, sessionId, stepParam, nav) {
       h("a", { href: "#", text: "Back to sessions" }));
     return;
   }
-  const maxStep = Math.min(st.session.step, 9);
-  let n = Number(stepParam) || Math.min(st.session.step, 8);
+  const maxStep = Math.min(st.session.step, 13);
+  let n = Number(stepParam) || Math.min(st.session.step, 13);
   if (n > maxStep) n = maxStep;
-  if (n >= 9) { root.replaceChildren(analysisPlaceholder(st)); return; }
-  const step = STEPS[n - 1];
-
+  const title = n <= 8 ? STEPS[n - 1].title : ANALYSIS_TITLES[n];
   const head = h("div", { class: "stephead" },
-    h("p", { class: "progress", text: `Step ${n} of 13: ${step.title}` }),
+    h("p", { class: "progress", text: `Step ${n} of 13: ${title}` }),
     h("nav", { class: "steps", "aria-label": "Steps" },
-      ...STEPS.map(s => s.n <= maxStep
-        ? h("a", { href: `#/s/${sessionId}/${s.n}`, class: s.n === n ? "on" : null, "aria-current": s.n === n ? "step" : null, text: String(s.n) })
-        : h("span", { class: "off", text: String(s.n) }))));
+      ...Array.from({ length: 13 }, (_, i) => i + 1).map(k => k <= maxStep
+        ? h("a", { href: `#/s/${sessionId}/${k}`, class: k === n ? "on" : null, "aria-current": k === n ? "step" : null, text: String(k) })
+        : h("span", { class: "off", text: String(k) }))));
+
+  if (n >= 9) {
+    const page = h("div", { class: "panel interview" }, head);
+    root.replaceChildren(page);
+    window.scrollTo(0, 0);
+    await renderAnalysis(sb, st, n, sessionId, page, async (next) => {
+      const step = Math.max(st.session.step, next);
+      const patch = next >= 13 ? { step, status: "done" } : { step };
+      const { error } = await sb.from("sessions").update(patch).eq("id", st.session.id);
+      if (error) { page.append(h("p", { class: "msg", text: `Could not save: ${error.message}` })); return; }
+      nav(`#/s/${sessionId}/${next}`);
+    });
+    return;
+  }
+  const step = STEPS[n - 1];
   const page = h("form", { class: "panel interview", novalidate: "" }, head);
 
   if (n === 1) {
@@ -210,10 +224,4 @@ export async function showInterview(sb, root, sessionId, stepParam, nav) {
   window.scrollTo(0, 0);
 }
 
-function analysisPlaceholder(st) {
-  return h("div", { class: "panel" },
-    h("p", { class: "progress", text: "Step 9 of 13: Foundations" }),
-    h("p", { text: "Interview confirmed. The analysis steps (9 to 13) are the next build." }),
-    h("p", {}, h("a", { href: `#/s/${st.session.id}/8`, text: "Back to the summary" }), " · ", h("a", { href: "#", text: "Sessions" })));
-}
 

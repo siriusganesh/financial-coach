@@ -3,7 +3,11 @@ const { chromium } = require('playwright');
 // the Supabase REST API. Run: python3 -m http.server 8765 & node tests/e2e/interview.cjs
 // The real js/config.js is replaced by a fake one through page.route.
 const BASE = process.env.BASE_URL || 'http://localhost:8765/';
-const db = { sessions: [], ledgers: [] };
+const fs = require('fs'), path = require('path');
+const db = { sessions: [], ledgers: [], plan_results: [] };
+// tax_limits row from the seed in supabase/schema.sql
+const sql = fs.readFileSync(path.join(__dirname, '../../supabase/schema.sql'), 'utf8');
+const LIMITS = { year: 2026, source: 'seed', data: JSON.parse(sql.split('insert into public.tax_limits')[1].split("'")[1]) };
 function mock(page) {
   return page.route('https://abcdefgh.supabase.co/**', async r => {
     const req = r.request(), url = new URL(req.url()), m = req.method();
@@ -22,6 +26,11 @@ function mock(page) {
       if (m === 'POST') { const row = JSON.parse(req.postData()); if (db.ledgers.some(l => l.session_id === row.session_id && l.version === row.version)) return json(409, { message: 'dup version' }); db.ledgers.push(row); return r.fulfill({ status: 201, body: '' }); }
       const rows = db.ledgers.filter(l => l.session_id === eq('session_id')).sort((a, b) => b.version - a.version).slice(0, 1);
       return json(200, rows);
+    }
+    if (tbl === 'tax_limits') return json(200, [LIMITS]);
+    if (tbl === 'plan_results') {
+      if (m === 'POST') { db.plan_results.push(JSON.parse(req.postData())); return r.fulfill({ status: 201, body: '' }); }
+      return json(200, db.plan_results.filter(x => x.session_id === eq('session_id') && String(x.ledger_version) === eq('ledger_version')));
     }
     return json(404, {});
   });
@@ -145,8 +154,29 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
   await p.waitForSelector('text=Step 9 of 13: Foundations');
   ok(db.sessions[0].status === 'analysis' && db.sessions[0].step === 9, 'session moves to analysis, step 9');
   ok(db.ledgers.length === 8 && db.ledgers.every((l, i) => l.version === i + 1), 'append-only versions 1..8');
+  await p.waitForSelector('text=B1. Employer match', { timeout: 90000 });
+  const s9 = await p.textContent('#interview');
+  ok(/Method: code\. Passed\./.test(s9), 'Section 12 self-test passes in Pyodide');
+  ok(/B4\. Liquidity buffer/.test(s9) && /\[RULE\]/.test(s9) && /\[CALC\]/.test(s9), 'foundations shown with tags');
+  ok(/Car.*4\.90%.*0-4\.99%/.test(s9), 'car debt in the 0-4.99% row');
+  ok(db.plan_results.length === 1 && db.plan_results[0].ledger_version === 8 && /^[0-9a-f]{12}$/.test(db.plan_results[0].calculator_version), 'plan_results saved once with versions');
+  await p.setViewportSize({ width: 375, height: 800 });
+  ok(await p.evaluate(() => document.documentElement.scrollWidth) <= 375, 'no side scroll at 375 on step 9');
+  if (process.env.SHOTS) await p.screenshot({ path: `${process.env.SHOTS}/step9-375.png`, fullPage: true });
+  await p.setViewportSize({ width: 1100, height: 900 });
+  for (const [k, marker] of [[10, 'C8. Glide path'], [11, 'E5 and E6. Retirement'], [12, 'F1. Gate'], [13, 'Calculator report']]) {
+    await p.click('button:has-text("Continue")');
+    await p.waitForSelector(`text=Step ${k} of 13`);
+    await p.waitForSelector(`text=${marker}`, { timeout: 30000 });
+    ok(true, `step ${k} renders ${marker}`);
+    if (process.env.SHOTS) await p.screenshot({ path: `${process.env.SHOTS}/step${k}.png`, fullPage: true });
+  }
+  const s13 = await p.textContent('#interview');
+  ok(/SNAPSHOT/.test(s13) && /Federal bracket/.test(s13), 'final output has report and assumptions');
+  ok(db.sessions[0].status === 'done' && db.sessions[0].step === 13, 'session done at step 13');
+  ok(db.plan_results.length === 1, 'same ledger and calculator version: no duplicate plan_results');
   await p.goto(BASE + '#'); await p.waitForSelector('#sessions a');
-  ok(/Step 9 of 13 · analysis/.test(await p.textContent('#sessions')), 'session list shows progress');
+  ok(/Step 13 of 13 · done/.test(await p.textContent('#sessions')), 'session list shows progress');
   ok(errs.length === 0, 'no console errors: ' + JSON.stringify(errs));
   await b.close();
 })().catch(e => { console.error('FAIL', e.message.split('\n').slice(0, 6).join('\n')); process.exit(1); });

@@ -167,9 +167,12 @@ create policy "usage own select" on public.usage
   for select to authenticated using (auth.uid() = user_id);
 
 -- =====================================================================
--- seed: tax year 2026 (coach-reference.md Section 2)
+-- seed: tax year 2026 (coach-reference.md Section 2, plus federal brackets)
 -- Keys match LEDGER_TEMPLATE["limits"] in coach_calculator.py, plus the
 -- catch-up and phase-out values the account plan needs.
+-- brackets: [upper bound of taxable income (null = no limit), rate], used for
+-- the D2 Roth vs. traditional rule. Source: Rev. Proc. 2025-32 Sections 4.01
+-- and 4.14(1). Rerunning this file updates the row (upsert).
 -- =====================================================================
 
 insert into public.tax_limits (year, data, source) values (
@@ -185,7 +188,14 @@ insert into public.tax_limits (year, data, source) values (
     "hsa_catchup_55": 1000,
     "roth_start": {"single": 153000, "hoh": 153000, "mfj": 242000},
     "roth_end":   {"single": 168000, "hoh": 168000, "mfj": 252000},
-    "trad_ira_deduction_covered": {"single": [81000, 91000], "mfj": [129000, 149000]}
+    "trad_ira_deduction_covered": {"single": [81000, 91000], "mfj": [129000, 149000]},
+    "std_deduction": {"single": 16100, "mfj": 32200, "hoh": 24150},
+    "brackets": {
+      "single": [[12400, 0.10], [50400, 0.12], [105700, 0.22], [201775, 0.24], [256225, 0.32], [640600, 0.35], [null, 0.37]],
+      "mfj":    [[24800, 0.10], [100800, 0.12], [211400, 0.22], [403550, 0.24], [512450, 0.32], [768700, 0.35], [null, 0.37]],
+      "hoh":    [[17700, 0.10], [67450, 0.12], [105700, 0.22], [201750, 0.24], [256200, 0.32], [640600, 0.35], [null, 0.37]]
+    }
   }'::jsonb,
-  'IRS IR-2025-111 and Rev. Proc. 2025-19'
-) on conflict (year) do nothing;
+  'IRS IR-2025-111, Rev. Proc. 2025-19, Rev. Proc. 2025-32'
+) on conflict (year) do update
+  set data = excluded.data, source = excluded.source, updated_at = now();
