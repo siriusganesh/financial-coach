@@ -5,6 +5,32 @@
 
 import { fmtMoney } from "./form.js";
 import { renderTagged } from "./tags.js";
+import { changeLinks } from "./nav.js";
+
+// Which answers each result card uses, for its "Change:" links.
+const INPUTS = {
+  "Employer match": ["q14", "q15"],
+  "Debts": ["q11"],
+  "How steady your pay is": ["q4", "q5"],
+  "Emergency fund": ["q8", "q13", "q3", "q24"],
+  "Insurance": ["q22", "q23", "q3"],
+  "Too much in one place": ["q9", "q10", "q5"],
+  "Roth IRA": ["q5", "q14", "q9"],
+  "Your invested savings": ["q9", "q18"],
+  "Your future paychecks": ["q5", "q6"],
+  "How much risk fits you": ["q19"],
+  "Share of your savings in stocks": ["q19", "q9", "q5"],
+  "How the stock share changes over time": ["q6", "q14"],
+  "Where your monthly saving goes": ["q12", "q14", "q11"],
+  "Roth or traditional": ["q2", "q5", "q14"],
+  "Your goals": ["q18"],
+  "Retirement": ["q17", "q6", "q7", "q14"],
+  "Before age 59½": ["q6", "q9"],
+  "Borrowing to invest": ["q25", "q19"],
+  "Assumptions the plan used": ["q17", "q18"],
+};
+let EDIT = { id: null, ret: null };
+export function setEditContext(id, ret) { EDIT = { id, ret }; }
 
 export function h(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);
@@ -29,6 +55,7 @@ export function card(title, status, plain, math) {
   if (status != null) head.append(" ", ok(status));
   const sec = h("section", { class: "q card" }, head, ...plain.map(x => typeof x === "string" ? p(x) : x));
   if (math?.length) sec.append(h("details", { class: "math" }, h("summary", { text: "Show the math" }), ...math));
+  if (EDIT.id && INPUTS[title]) { const c = changeLinks(EDIT.id, INPUTS[title], EDIT.ret); if (c) sec.append(c); }
   return sec;
 }
 

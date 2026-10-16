@@ -1,5 +1,8 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { showInterview } from "./interview.js";
+import { parseRoute, getLeaveGuard, setLeaveGuard } from "./nav.js";
+
+let shownHash = null;     // the route on screen now
 
 const $ = (id) => document.getElementById(id);
 const views = ["loading", "setup", "signIn", "home", "interview"];
@@ -82,13 +85,24 @@ async function newSession() {
 // Routes: "" or "#" = session list; "#/s/<id>[/<step>]" = interview.
 async function route() {
   if (!currentUser) { show("signIn"); return; }
-  const m = location.hash.match(/^#\/s\/([0-9a-f-]{36})(?:\/(\d+))?$/);
-  if (m) {
+  const target = location.hash;
+  const guard = getLeaveGuard();
+  if (guard && shownHash !== null && target !== shownHash) {
+    if (!(await guard(target))) {                       // stay: unsaved answers need fixing
+      history.replaceState(null, "", shownHash || "#");
+      return;
+    }
+  }
+  setLeaveGuard(null);
+  shownHash = target;
+  const r = parseRoute(location.hash);
+  if (r) {
     show("interview");
-    await showInterview(sb, $("interview"), m[1], m[2], (h) => { location.hash = h; });
+    await showInterview(sb, $("interview"), r.id, r.step, (h) => { location.hash = h; }, { q: r.q, ret: r.ret });
     return;
   }
   show("home");
+  document.title = "Your sessions · Financial Coach";
   await loadSessions();
 }
 
@@ -111,6 +125,10 @@ function init() {
   $("signOut").addEventListener("click", () => sb.auth.signOut());
   $("newSession").addEventListener("click", newSession);
   window.addEventListener("hashchange", route);
+  // Closing or reloading the tab with unsaved answers: ask the browser to confirm.
+  window.addEventListener("beforeunload", (ev) => {
+    if (document.querySelector("form.interview[data-dirty]")) { ev.preventDefault(); ev.returnValue = ""; }
+  });
   // INITIAL_SESSION fires once on load (also after the magic-link redirect),
   // then SIGNED_IN / SIGNED_OUT on changes. Defer the async work so the
   // callback returns at once (supabase-js holds a lock while it runs).
