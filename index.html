@@ -15,8 +15,14 @@
 <body>
 <header class="bar">
   <span class="brand">Financial Coach</span>
-  <span id="who" class="who" hidden></span>
-  <button id="signOut" class="link" type="button" hidden>Sign out</button>
+  <div id="account" class="account" hidden>
+    <button id="accountBtn" class="link" type="button" aria-expanded="false" aria-controls="accountMenu">Account <span aria-hidden="true">▾</span></button>
+    <div id="accountMenu" class="account-menu" hidden>
+      <p id="who" class="who"></p>
+      <button id="changePw" class="link" type="button">Change password</button>
+      <button id="signOut" class="link" type="button">Sign out</button>
+    </div>
+  </div>
 </header>
 
 <main id="app">
@@ -30,14 +36,51 @@
   </section>
 
   <section id="signIn" class="panel" hidden>
-    <h1>Sign in</h1>
-    <p class="muted">Access is by invitation. Enter the email address your invite went to. We will send a sign-in link.</p>
+    <h1 tabindex="-1">Sign in</h1>
+    <p class="muted">Access is by invitation.</p>
     <form id="signInForm" novalidate>
       <label for="email">Email</label>
-      <input id="email" name="email" type="email" autocomplete="email" required>
-      <button id="sendLink" type="submit">Send sign-in link</button>
+      <input id="email" name="email" type="email" autocomplete="username" required>
+      <label for="password">Password</label>
+      <div class="pw">
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button type="button" class="pwtoggle" aria-controls="password" aria-pressed="false">Show</button>
+      </div>
+      <button id="signInBtn" type="submit">Sign in</button>
     </form>
     <p id="signInMsg" class="msg" role="status" aria-live="polite"></p>
+    <p><button type="button" id="forgotBtn" class="link" aria-expanded="false" aria-controls="resetForm">Forgot your password?</button></p>
+    <form id="resetForm" class="subform" novalidate hidden>
+      <h2>Reset your password</h2>
+      <p class="muted">We will email you a link to set a new password.</p>
+      <label for="resetEmail">Email</label>
+      <input id="resetEmail" type="email" autocomplete="email" required>
+      <button id="resetBtn" type="submit">Send reset link</button>
+      <p id="resetMsg" class="msg" role="status" aria-live="polite"></p>
+    </form>
+  </section>
+
+  <section id="setPassword" class="panel" hidden>
+    <h1 id="setPwTitle" tabindex="-1">Set your password</h1>
+    <p id="setPwIntro" class="muted">Choose a password for your account.</p>
+    <form id="setPwForm" novalidate>
+      <input id="pwUser" type="email" autocomplete="username" class="sr-only" tabindex="-1" aria-hidden="true" readonly>
+      <label for="newPw">New password</label>
+      <div class="pw">
+        <input id="newPw" type="password" autocomplete="new-password" aria-describedby="newPwHint newPwErr" required>
+        <button type="button" class="pwtoggle" aria-controls="newPw" aria-pressed="false">Show</button>
+      </div>
+      <p id="newPwHint" class="hint">At least 12 characters. A short phrase of a few words works well.</p>
+      <p id="newPwErr" class="err" role="alert"></p>
+      <label for="newPw2">Type the password again</label>
+      <input id="newPw2" type="password" autocomplete="new-password" aria-describedby="newPw2Err" required>
+      <p id="newPw2Err" class="err" role="alert"></p>
+      <div class="actions">
+        <button type="button" id="setPwCancel" class="link" hidden>Cancel</button>
+        <button type="submit" id="setPwBtn">Save password</button>
+      </div>
+    </form>
+    <p id="setPwMsg" class="msg" role="status" aria-live="polite"></p>
   </section>
 
   <section id="home" class="panel" hidden>
