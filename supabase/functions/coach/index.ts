@@ -71,7 +71,11 @@ Deno.serve(async (req) => {
   // User client: every read and write below goes through RLS as this user.
   const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? "";
   const db = createClient(url, anon, { global: { headers: { authorization: auth } } });
-  const { data: u, error: ue } = await db.auth.getUser(auth.replace(/^Bearer /i, ""));
+  // Verify the user with a client that has NO global authorization header:
+  // getUser() adds its own "Authorization", and the two merge into
+  // "Bearer x, Bearer y", which the gateway rejects with an HTML page.
+  const authc = createClient(url, anon);
+  const { data: u, error: ue } = await authc.auth.getUser(auth.replace(/^Bearer /i, ""));
   if (ue || !u?.user) return fail(401, `Not signed in${ue ? `: ${ue.message}` : "."}`);
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
