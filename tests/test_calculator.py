@@ -53,6 +53,15 @@ class SelfTest(unittest.TestCase):
             dict(amount=40_000, start_age=67),
             dict(amount=35_000, start_age=60)]), (1_125_000, 355_000, 1_480_000))
 
+    def test_gap_capped_when_income_exceeds_spending(self):
+        # Social Security 73,500 > spending 45,600: steady need 0; each of the
+        # 12 years before 67 needs only the spending, 45,600.
+        self.assertEqual(c.retirement_need_streams(45_600, 55, [dict(amount=73_500, start_age=67)]),
+                         (0, 12 * 45_600, 12 * 45_600))
+        # A spouse earning more than the spending: no gap in those years.
+        self.assertEqual(c.retirement_need_streams(45_600, 55, [
+            dict(amount=66_500, start_age=55, end_age=67), dict(amount=73_500, start_age=67)]), (0, 0, 0))
+
     def test_monte_carlo(self):
         p10, p50, p90 = c.monte_carlo(self.W, 0.20 * self.net, 33, 0.9)
         self.close(p10, 776_749)
