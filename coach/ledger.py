@@ -88,7 +88,7 @@ def build_ledger(answers, limits, today):
         x["match_per_year"] = 12 * _num(e, "match_m")
         x["ss_annual"] = e.get("ss_annual")
         if x["ss_annual"] is None:
-            A.append(f"{name}: Social Security from the Section 3 rough placeholder [DEFAULT]")
+            A.append(f"[DEFAULT] {name}: Social Security from the Section 3 rough placeholder")
         x["ss_covered"] = e.get("ss_covered") != "no"
         if e.get("ss_start_age") is None:
             A.append(f"{name}: Social Security starts at 67 [DEFAULT]")
@@ -119,8 +119,8 @@ def build_ledger(answers, limits, today):
     gross = sum(x["base"] + x["bonus"] + x["commission"] + x["rsu_per_year"] + x["espp_per_year"] for x in who)
     taxable = max(0.0, gross - sum(x["pretax_deferral"] + x["hsa_payroll"] for x in who) - std)
     L["marginal_bracket"] = marginal_bracket(taxable, br)
-    A.append(f"Federal bracket {L['marginal_bracket']:.0%} from taxable income ${taxable:,.0f} "
-             f"(gross minus traditional deferrals, payroll HSA, and the standard deduction) [CALC]")
+    A.append(f"Federal bracket {L['marginal_bracket']:.0%} [CALC] from taxable income ${taxable:,.0f} [CALC] "
+             f"(gross minus traditional deferrals, payroll HSA, and the standard deduction)")
 
     # ---- limits ----
     L["limits"] = {k: limits[k] for k in ("k401", "ira", "hsa_self", "hsa_family", "roth_start")}
@@ -158,7 +158,7 @@ def build_ledger(answers, limits, today):
     L["same_industry_holdings"] = same
     L["largest_single_stock"] = single
     if hh.get("sector_holdings"):
-        A.append("Same-industry holdings: sector names matched to the earners' industry text [RULE]")
+        A.append("[RULE] Same-industry holdings: sector names matched to the earners' industry text")
 
     L["leveraged"] = [{"name": x.get("name") or "leveraged fund", "multiple": _num(x, "multiple", 2),
                        "value": _num(x, "value")} for x in hh.get("leveraged", [])]
@@ -234,12 +234,12 @@ def build_ledger(answers, limits, today):
     L["retirement"] = {"spending": rs,
                        "includes_ending_costs": None if inc is None else inc == "yes"}
     if rs is None:
-        A.append("Retirement spending: current spending minus costs that end first [DEFAULT]")
+        A.append("[DEFAULT] Retirement spending: current spending minus costs that end first")
     L["highest_deductible"] = _num(hh, "highest_deductible")
     L["leverage_interest"] = hh.get("leverage_interest") or "none"
     routes = {e.get("ira_route") for e in E}
     L["ira_plan"] = "backdoor" if "backdoor" in routes else "direct" if "direct" in routes else "none"
-    A.append("Market defaults: real risk-free 1.5%, equity premium 5%, volatility 18% [DEFAULT]")
+    A.append("Market defaults: real risk-free 1.5% [DEFAULT], equity premium 5% [DEFAULT], volatility 18% [DEFAULT]")
     return L, A
 
 

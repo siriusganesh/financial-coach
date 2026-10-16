@@ -4,6 +4,7 @@
 // calculator version; a changed answer gives a new ledger version and a rerun.
 
 import { fmtMoney } from "./form.js";
+import { renderTagged, legend } from "./tags.js";
 
 let worker = null, seq = 0;
 const pending = new Map();
@@ -20,9 +21,9 @@ function h(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (v == null || v === false) continue;
-    if (k === "class") n.className = v; else if (k === "text") n.textContent = v; else n.setAttribute(k, v);
+    if (k === "class") n.className = v; else if (k === "text") n.append(renderTagged(v)); else n.setAttribute(k, v);
   }
-  for (const k of kids) if (k != null) n.append(k);
+  for (const k of kids) if (k != null) n.append(typeof k === "string" ? renderTagged(k) : k);
   return n;
 }
 const $m = (v, tag = "CALC") => `${v < 0 ? "−" : ""}${fmtMoney(Math.abs(Math.round(v)))} [${tag}]`;
@@ -83,11 +84,11 @@ function step9(o) {
   out.push(sec("B1. Employer match", table(["Earner", "Your contribution", "Needed for full match", "Result"],
     L.earners.filter(e => R.B1[e.name]).map(e => [e.name, $m(e.employee_contrib), $m(e.match_required, "USER"), R.B1[e.name]]))));
   out.push(sec("B2. Debt rule", R.B2.length
-    ? table(["Debt", "Rate used", "Row [RULE]", "Action", "Promo payment needed"], R.B2.map(d =>
+    ? table(["Debt", "Rate used", "Row", "Action", "Promo payment needed"], R.B2.map(d =>
       [d.name, pct(d.rate_used, 2, d.promo_payment_needed != null ? "USER, after promo" : "USER"), d.row, B2_ACTION[d.row],
         d.promo_payment_needed != null ? `${fmtMoney(d.promo_payment_needed)}/mo [CALC]` : "n/a"]))
     : p("No debts. PASS")));
-  out.push(sec("B3. Human capital type", table(["Earner", "Type [RULE]", "Equity pay"],
+  out.push(sec("B3. Human capital type", table(["Earner", "Type", "Equity pay"],
     Object.entries(R.types).map(([n, [t, e]]) => [n, t ?? "no income", `${e}% [CALC]`])),
     p(`Household type: ${R.household_type} [RULE]. Same industry: ${R.same_industry ? "yes" : "no"}.`)));
   const b = R.B4;
@@ -290,7 +291,7 @@ export async function renderAnalysis(sb, st, n, sessionId, page, save) {
       h("p", {}, h("a", { href: `#/s/${sessionId}/8`, text: "Go to the summary to change an answer" })));
     return;
   }
-  body.replaceChildren(...RENDER[n](o, { sb, st }), p(`Calculator version ${o.calcVersion}, answers version ${st.version}.`, "muted small"));
+  body.replaceChildren(legend(), ...RENDER[n](o, { sb, st }), p(`Calculator version ${o.calcVersion}, answers version ${st.version}.`, "muted small"));
   if (n < 13) {
     const go = h("button", { type: "button", text: "Continue" });
     const back = h("a", { href: `#/s/${sessionId}/${n - 1}`, class: "btnlink", text: "Back" });
