@@ -291,7 +291,9 @@ def _jsonable(o):
         return {str(k): _jsonable(v) for k, v in o.items()}
     if isinstance(o, (list, tuple)):
         return [_jsonable(v) for v in o]
-    if isinstance(o, float) and o != o:
+    # NaN and +/-Infinity are not valid JSON; the browser's JSON.parse rejects
+    # them. Example: retirement pct when the need is $0 (income covers spending).
+    if isinstance(o, float) and (o != o or o in (float("inf"), float("-inf"))):
         return None
     return o
 
