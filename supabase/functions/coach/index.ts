@@ -145,7 +145,10 @@ Deno.serve(async (req) => {
         try {
           const o = JSON.parse(g.text);
           text = narrativeText(o);
-          problems = [...checkReply(text, allowed).problems, ...checkDates(o.next3.map((x: { date: string }) => x.date), today)];
+          // Check only Gemini's own words; the section labels are ours
+          // (for example "30%+ market drop" would fail the tag rule).
+          const own = [...o.next3.map((x: { text: string }) => x.text), ...Object.values(o.changes as Record<string, string>)].join("\n");
+          problems = [...checkReply(own, allowed).problems, ...checkDates(o.next3.map((x: { date: string }) => x.date), today)];
           if (o.next3.length !== 3) problems.push("Item 9 must have exactly 3 items.");
         } catch { text = g.text; problems = ["Reply was not valid JSON."]; }
       } else {
