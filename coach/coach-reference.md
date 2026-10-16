@@ -506,6 +506,8 @@ Steady need = (yearly spending − permanent income) / wr
 Gap dollars = for each year from the first retirement until the last permanent
   income starts: (permanent income − income actually received that year)
   Include a still-working spouse's net pay as temporary income.
+  Cap each year at (the smaller of spending and permanent income) − income received, and
+  never below 0: if Social Security and pensions exceed spending, the gap is spending only.
 Portfolio needed = steady need + gap dollars
 ```
 Worked example (single): spending $70,000; retires at 60; Social Security $34,800 starts at 67.
@@ -956,6 +958,9 @@ def retirement_need_streams(spend, start_age, streams, wr=0.04):
     need = (spend - permanent income) / wr, plus the extra dollars needed in
     each year before every permanent stream has started (no discounting,
     conservative), minus any temporary income (e.g., a spouse still working).
+    Each gap year is capped: the steady need already pays spend - permanent,
+    so the year adds min(spend, permanent) - income received, and never less
+    than 0 (a year with extra income does not offset another year).
     Returns (steady_need, gap_dollars, total_need)."""
     perm = [s for s in streams if s.get("end_age") is None]
     steady = max(0.0, spend - sum(s["amount"] for s in perm)) / wr
@@ -965,7 +970,7 @@ def retirement_need_streams(spend, start_age, streams, wr=0.04):
     for a in range(start_age, max(last, end_temp)):
         active = sum(s["amount"] for s in streams
                      if s["start_age"] <= a and (s.get("end_age") is None or a < s["end_age"]))
-        gap += sum(s["amount"] for s in perm) - active
+        gap += max(0.0, min(spend, sum(s["amount"] for s in perm)) - active)
     return round(steady), round(gap), round(steady + gap)
 
 def bridge(ret_age, spend, accessible, access_age=59.5):
