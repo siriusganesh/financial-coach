@@ -223,15 +223,18 @@ export function step11(o) {
        [g.name, $m(g.amount), String(g.years), `${g.stock_pct}% [RULE]`, $m(g.reserve), `${fmtMoney(g.need_per_month)}/mo [CALC]`, `${g.funded_pct}% [CALC]`]))]));
 
   const need4 = r.need["0.04"]?.[2] ?? r.need["0.04"];
+  const sup = r.supported_spending ?? {};
+  const sup4 = sup["0.04"];
   const STATUS = { "On track": "You are on track.", Borderline: "You are close, but with little room for error.", Behind: "You are behind. You can save more, spend less in retirement, or retire later." };
   out.push(card("Retirement", r.status === "On track",
-    [`You plan to spend ${$m(r.spending, r.spending_source.startsWith("user") ? "USER" : "DEFAULT")} a year in retirement.`,
-     `To pay for that, you need about ${$m(need4)} saved when you retire. This assumes you take out 4% [DEFAULT] a year, and counts Social Security and pensions.`,
-     `If you keep saving as you do now, you would have about ${$m(r.projected)} at age ${pj.first_retirement_e1_age}. That is ${r.pct}% [CALC] of what you need.`,
+    [`If you keep saving as you do now, you would have about ${$m(r.projected)} when you retire at ${pj.first_retirement_e1_age}.`,
+     ...(sup4 != null ? [`That could pay for about ${$m(sup4)} a year of spending, in today's dollars. This counts Social Security and pensions, and assumes you take out 4% [DEFAULT] of your savings each year.`] : []),
+     `You plan to spend ${$m(r.spending, r.spending_source.startsWith("user") ? "USER" : "DEFAULT")} a year.`,
      STATUS[r.status] ?? r.status],
     [p(`E5 need = (spending − permanent income) / wr + gap years before Social Security or pension. Spending source: ${r.spending_source}.${r.removed_costs.length ? " Removed: " + r.removed_costs.map(([n, v]) => `${n} ${fmtMoney(v)}/mo`).join(", ") + "." : ""} Social Security: ${Object.entries(r.ss_by_earner).map(([n, v]) => `${n} ${fmtMoney(v)}/yr`).join(", ")}.`),
-     table(["Withdrawal rate", "Steady need", "Gap years", "Total need"], Object.entries(r.need).map(([wr, [s, g, t]]) =>
-       [`${(Number(wr) * 100).toFixed(1)}% [DEFAULT]`, $m(s), $m(g), $m(t)]))]));
+     p(`E6: projected ${fmtMoney(r.projected)} ÷ need at 4% ${fmtMoney(need4)} = ${r.pct}% → ${r.status}. Supported spending = highest spending whose need at that rate is covered by the projected savings (search on plan()).`),
+     table(["Withdrawal rate", "Steady need", "Gap years", "Total need", "Spending it supports"], Object.entries(r.need).map(([wr, [s, g, t]]) =>
+       [`${(Number(wr) * 100).toFixed(1)}% [DEFAULT]`, $m(s), $m(g), $m(t), sup[wr] != null ? `${$m(sup[wr])}/yr` : "n/a"]))]));
 
   if (o.monte_carlo) {
     const [p10, p50, p90] = o.monte_carlo;

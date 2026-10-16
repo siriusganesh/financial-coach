@@ -188,6 +188,7 @@ const ok = (c, msg) => { if (!c) throw new Error('ASSERT: ' + msg); console.log(
       ok(!jargon, `step ${k}: no jargon outside "Show the math" (${jargon && jargon[0]})`);
     }
     if (process.env.SHOTS) await p.screenshot({ path: `${process.env.SHOTS}/step${k}.png`, fullPage: true });
+    if (k === 11) ok(/could pay for about \$[\d,]+ \(calculated\) a year of spending, in today's dollars/.test(await p.textContent('#interview')), 'retirement card shows supported spending in today\'s dollars');
   }
   const s13 = await p.textContent('#interview');
   ok(/SNAPSHOT/.test(s13) && /Federal bracket/.test(s13), 'final output has report and assumptions');
